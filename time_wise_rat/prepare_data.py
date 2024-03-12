@@ -21,15 +21,15 @@ def convert_csv_datasets_to_tensors(csv_dir: Path, cache_dir: Path, config: RatC
 
 
 if __name__ == "__main__":
-    # convert_csv_datasets_to_tensors(
-    #     csv_dir=Path("data/raw"),
-    #     cache_dir=Path("data/cache"),
-    #     config=RatConfig(),
-    #     verbose=True
-    # )
-    train_ds, val_ds, test_ds = split_tensors_into_datasets(
+    convert_csv_datasets_to_tensors(
+        csv_dir=Path("data/raw"),
         cache_dir=Path("data/cache"),
-        name="traffic",
-        train_size=0.7,
-        val_size=0.1
+        config=RatConfig(),
+        verbose=True
     )
+    # train_ds, val_ds, test_ds = split_tensors_into_datasets(
+    #     cache_dir=Path("data/cache"),
+    #     name="traffic",
+    #     train_size=0.7,
+    #     val_size=0.1
+    # )

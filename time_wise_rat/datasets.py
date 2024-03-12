@@ -25,7 +25,7 @@ class TSProcessor:
     @staticmethod
     def _transform(values: np.ndarray, config: RatConfig) -> dict[str, Tensor]:
         # apply normalizing transformations to data
-        values = np.diff(values)
+        # values = np.diff(values)
         # construct patches from normalized data
         patches = construct_patches(
             array=values,

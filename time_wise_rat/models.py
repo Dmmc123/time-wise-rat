@@ -1,7 +1,7 @@
 from time_wise_rat.config import RatConfig
 from torch import Tensor, nn
 from sklearn.metrics import (
-    mean_squared_error,
+    root_mean_squared_error,
     mean_absolute_error
 )
 
@@ -56,9 +56,8 @@ class Baseline(pl.LightningModule):
         )
         # regression head
         self.head = nn.Sequential(
-            nn.Linear(config.num_patches * config.patch_length, config.dim_fc),
             nn.Dropout(p=config.reg_head_drop_out),
-            nn.Linear(config.dim_fc, 1)
+            nn.Linear(config.num_patches * config.patch_length, 1)
         )
 
     def forward(self, x: Tensor) -> Tensor:
@@ -66,7 +65,7 @@ class Baseline(pl.LightningModule):
         x = self.pos_enc(x)
         out = self.encoder(x)
         # flat out encoder representations before regression
-        out = out.view(-1, config.num_patches * config.patch_length)
+        out = out.view(-1, self.config.num_patches * self.config.patch_length)
         out = self.head(out)
         return out
 
@@ -75,25 +74,25 @@ class Baseline(pl.LightningModule):
 
     def training_step(self, batch: tuple[Tensor, Tensor], batch_idx: int) -> Tensor:
         src, tgt = batch
-        pred = self(x=src)
+        pred = self(x=src).view(-1)
         loss = torch.nn.functional.mse_loss(pred, tgt)
         self.log("train_mse", loss.item(), sync_dist=True, batch_size=src.size(0))
         return loss
 
     def validation_step(self, batch: tuple[Tensor, Tensor], batch_idx: int) -> dict[str, float]:
         src, tgt = batch
-        pred = self(x=src)
-        rmse = mean_squared_error(tgt.numpy(), pred.numpy(), squared=False)
-        mae = mean_absolute_error(tgt.numpy(), pred.numpy())
+        pred = self(x=src).view(-1)
+        rmse = root_mean_squared_error(tgt.cpu().numpy(), pred.cpu().numpy())
+        mae = mean_absolute_error(tgt.cpu().numpy(), pred.cpu().numpy())
         self.log("val_rmse", rmse, sync_dist=True, batch_size=src.size(0))
         self.log("val_mae", mae, sync_dist=True, batch_size=src.size(0))
         return {"val_rmse": rmse, "val_mae": mae}
 
     def test_step(self, batch: tuple[Tensor, Tensor], batch_idx: int) -> dict[str, float]:
         src, tgt = batch
-        pred = self(x=src)
-        rmse = mean_squared_error(tgt.numpy(), pred.numpy(), squared=False)
-        mae = mean_absolute_error(tgt.numpy(), pred.numpy())
+        pred = self(x=src).view(-1)
+        rmse = root_mean_squared_error(tgt.cpu().numpy(), pred.cpu().numpy())
+        mae = mean_absolute_error(tgt.cpu().numpy(), pred.cpu().numpy())
         metric_dict = {"test_rmse": rmse, "test_mae": mae}
         self.log_dict(metric_dict)
         return metric_dict
