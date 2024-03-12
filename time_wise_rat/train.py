@@ -22,16 +22,15 @@ def train(
         test_loader: DataLoader,
 ) -> Mapping[str, float]:
     # create callbacks
-    model_path = weights_dir / model_name
     checkpoint = ModelCheckpoint(
-        dirpath=model_path,
+        dirpath=weights_dir / model_name / dataset_name,
         monitor="val_rmse",
         save_top_k=3,
-        filename=dataset_name+"-{epoch}-{val_rmse:.4f}"
+        filename="{epoch}-{val_rmse:.4f}"
     )
     tb_logger = TensorBoardLogger(
         save_dir=logs_dir,
-        name=model_name
+        name=f"{model_name}/{dataset_name}"
     )
     early_stopping = EarlyStopping(
         monitor="val_rmse",
@@ -42,7 +41,8 @@ def train(
         max_epochs=config.epochs,
         callbacks=[checkpoint, early_stopping],
         logger=tb_logger,
-        enable_progress_bar=False
+        enable_progress_bar=False,
+        log_every_n_steps=1
     )
     # fit the model
     trainer.fit(
