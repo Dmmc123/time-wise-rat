@@ -11,7 +11,6 @@ from torch.utils.data import Dataset
 from safetensors import safe_open
 from torch import Tensor
 from pathlib import Path
-from typing import Self
 
 
 @dataclass
@@ -70,3 +69,39 @@ class TSD(Dataset):
 
     def __getitem__(self, idx: int) -> tuple[Tensor, Tensor]:
         return self.patches[idx], self.targets[idx]
+
+
+def split_tensors_into_datasets(
+        cache_dir: Path,
+        name: str,
+        train_size: float,
+        val_size: float,
+) -> tuple[TSD, TSD, TSD]:
+    # read tensors
+    tensors_path = cache_dir / f"{name}.safetensors"
+    tensors = {}
+    with safe_open(tensors_path, framework="pt", device="cpu") as f:
+        for key in ("patches", "targets"):
+            tensors[key] = f.get_tensor(key)
+    # compute the indices
+    n_samples = tensors["patches"].size(0)
+    n_train = int(n_samples * train_size)
+    n_val = int(n_samples * val_size)
+    # construct a dataset object
+    train_ds = TSD(
+        name=tensors_path.stem,
+        patches=tensors["patches"][:n_train],
+        targets=tensors["targets"][:n_train]
+    )
+    val_ds = TSD(
+        name=tensors_path.stem,
+        patches=tensors["patches"][n_train:n_train+n_val],
+        targets=tensors["targets"][n_train:n_train+n_val]
+    )
+    test_ds = TSD(
+        name=tensors_path.stem,
+        patches=tensors["patches"][n_train+n_val:],
+        targets=tensors["targets"][n_train+n_val:]
+    )
+    # return the datasets
+    return train_ds, val_ds, test_ds
