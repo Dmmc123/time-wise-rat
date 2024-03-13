@@ -76,6 +76,7 @@ def split_tensors_into_datasets(
         name: str,
         train_size: float,
         val_size: float,
+        min_max_scale: bool
 ) -> tuple[TSD, TSD, TSD]:
     # read tensors
     tensors_path = cache_dir / f"{name}.safetensors"
@@ -87,21 +88,37 @@ def split_tensors_into_datasets(
     n_samples = tensors["patches"].size(0)
     n_train = int(n_samples * train_size)
     n_val = int(n_samples * val_size)
+    # crop out the tensors
+    train_p = tensors["patches"][:n_train]
+    train_t = tensors["targets"][:n_train]
+    val_p = tensors["patches"][n_train:n_train+n_val]
+    val_t = tensors["targets"][n_train:n_train+n_val]
+    test_p = tensors["patches"][n_train+n_val:]
+    test_t = tensors["targets"][n_train+n_val:]
+    # normalize to train min-max
+    if min_max_scale:
+        train_min, train_max = train_p.min(), train_p.max()
+        train_p = (train_p - train_min) / (train_max - train_min)
+        train_t = (train_t - train_min) / (train_max - train_min)
+        val_p = (val_p - train_min) / (train_max - train_min)
+        val_t = (val_t - train_min) / (train_max - train_min)
+        test_p = (test_p - train_min) / (train_max - train_min)
+        test_t = (test_t - train_min) / (train_max - train_min)
     # construct a dataset object
     train_ds = TSD(
         name=tensors_path.stem,
-        patches=tensors["patches"][:n_train],
-        targets=tensors["targets"][:n_train]
+        patches=train_p,
+        targets=train_t
     )
     val_ds = TSD(
         name=tensors_path.stem,
-        patches=tensors["patches"][n_train:n_train+n_val],
-        targets=tensors["targets"][n_train:n_train+n_val]
+        patches=val_p,
+        targets=val_t
     )
     test_ds = TSD(
         name=tensors_path.stem,
-        patches=tensors["patches"][n_train+n_val:],
-        targets=tensors["targets"][n_train+n_val:]
+        patches=test_p,
+        targets=test_t
     )
     # return the datasets
     return train_ds, val_ds, test_ds

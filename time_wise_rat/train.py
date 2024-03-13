@@ -66,6 +66,7 @@ def train_baseline(
     train_ds, val_ds, test_ds = split_tensors_into_datasets(
         cache_dir=cache_dir,
         name=dataset_name,
+        min_max_scale=True,
         train_size=0.7,
         val_size=0.1
     )
@@ -104,7 +105,7 @@ def train_baseline(
 if __name__ == "__main__":
     train_baseline(
         cache_dir=Path("data/cache"),
-        dataset_name="sp_500",
+        dataset_name="btc",
         weights_dir=Path("weights"),
         logs_dir=Path("runs"),
         config=RatConfig()
