@@ -1,13 +1,15 @@
 import pandas as pd
 import numpy as np
+import faiss
 import torch
+import tqdm
 
-
+from torch.utils.data import Dataset, DataLoader, TensorDataset
 from time_wise_rat.utils import construct_patches
 from time_wise_rat.config import RatConfig
+from time_wise_rat.models import Baseline
 from dataclasses import dataclass, field
 from safetensors.torch import save_file
-from torch.utils.data import Dataset
 from safetensors import safe_open
 from torch import Tensor
 from pathlib import Path
@@ -25,7 +27,9 @@ class TSProcessor:
     @staticmethod
     def _transform(values: np.ndarray, config: RatConfig) -> dict[str, Tensor]:
         # apply normalizing transformations to data
-        # values = np.diff(values)
+        n_train = int(values.shape[0] * config.train_size)
+        t_min, t_max = values[:n_train].min(), values[:n_train].max()
+        values = (values - t_min) / (t_max - t_min)
         # construct patches from normalized data
         patches = construct_patches(
             array=values,
@@ -57,6 +61,83 @@ class TSProcessor:
 
 
 @dataclass
+class RATSProcessor:
+
+    @staticmethod
+    def _extract(tensor_path: Path) -> dict[str, Tensor]:
+        tensors = {}
+        with safe_open(tensor_path, framework="pt", device="cpu") as f:
+            for key in ("patches", "targets"):
+                tensors[key] = f.get_tensor(key)
+        return tensors
+
+    @staticmethod
+    def _transform(
+            tensors: dict[str, Tensor],
+            baseline_ckpt_path: Path,
+            config: RatConfig
+    ) -> dict[str, Tensor]:
+        # make loader for training data
+        n_train = int(tensors["patches"].size(0) * config.train_size)
+        p_ds = TensorDataset(tensors["patches"])
+        loader = DataLoader(
+            dataset=p_ds,
+            batch_size=config.batch_size,
+            shuffle=False,
+            num_workers=config.num_workers
+        )
+        # load model and do inference
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        model = Baseline.load_from_checkpoint(
+            checkpoint_path=baseline_ckpt_path,
+            config=config
+        ).to(device)
+        embeddings = []
+        with torch.no_grad():
+            for (batch,) in tqdm.tqdm(loader, desc="Computing embeddings"):
+                out = model.encoder(batch.to(device)).to("cpu")
+                out = out.mean(dim=1).numpy()
+                embeddings.append(out)
+        embeddings = np.concatenate(embeddings, axis=0)
+        train_embs = embeddings[:n_train]
+        # index embeddings
+        index = faiss.IndexFlatIP(train_embs.shape[1])
+        index.add(train_embs)
+        # retrieve nearest neighbors
+        _, nn_idx = index.search(embeddings, k=config.num_templates)
+        nn_idx = torch.tensor(nn_idx, dtype=torch.long)
+        # return enriched tensors
+        tensors["nn_idx"] = nn_idx
+        return tensors
+
+    @staticmethod
+    def _load(cache_dir: Path, name: str, tensors: dict[str, Tensor]) -> None:
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        save_file(tensors, cache_dir / f"{name}.safetensors")
+
+    @staticmethod
+    def run(
+            cache_dir: Path,
+            name: str,
+            baseline_ckpt_path: Path,
+            config: RatConfig
+    ) -> None:
+        tensors = RATSProcessor._extract(
+            tensor_path=cache_dir / f"{name}.safetensors"
+        )
+        tensors = RATSProcessor._transform(
+            tensors=tensors,
+            baseline_ckpt_path=baseline_ckpt_path,
+            config=config
+        )
+        RATSProcessor._load(
+            cache_dir=cache_dir,
+            name=name,
+            tensors=tensors
+        )
+
+
+@dataclass
 class TSD(Dataset):
     """Time Series Dataset"""
 
@@ -71,12 +152,31 @@ class TSD(Dataset):
         return self.patches[idx], self.targets[idx]
 
 
+@dataclass
+class RATSD(Dataset):
+    """Retrieval Augmented Time Series Dataset"""
+
+    name: str = field(repr=True, init=True)
+    patches: Tensor = field(repr=False, init=True)
+    targets: Tensor = field(repr=False, init=True)
+    train_patches: Tensor = field(repr=False, init=True)
+    nn_idx: Tensor = field(repr=False, init=True)
+
+    def __len__(self) -> int:
+        return self.patches.size(0)
+
+    def __getitem__(self, idx: int) -> tuple[Tensor, Tensor, Tensor]:
+        return (
+            self.patches[idx],
+            self.train_patches[self.nn_idx[idx]],
+            self.targets[idx]
+        )
+
+
 def split_tensors_into_datasets(
         cache_dir: Path,
         name: str,
-        train_size: float,
-        val_size: float,
-        min_max_scale: bool
+        config: RatConfig
 ) -> tuple[TSD, TSD, TSD]:
     # read tensors
     tensors_path = cache_dir / f"{name}.safetensors"
@@ -86,8 +186,8 @@ def split_tensors_into_datasets(
             tensors[key] = f.get_tensor(key)
     # compute the indices
     n_samples = tensors["patches"].size(0)
-    n_train = int(n_samples * train_size)
-    n_val = int(n_samples * val_size)
+    n_train = int(n_samples * config.train_size)
+    n_val = int(n_samples * config.val_size)
     # crop out the tensors
     train_p = tensors["patches"][:n_train]
     train_t = tensors["targets"][:n_train]
@@ -95,15 +195,6 @@ def split_tensors_into_datasets(
     val_t = tensors["targets"][n_train:n_train+n_val]
     test_p = tensors["patches"][n_train+n_val:]
     test_t = tensors["targets"][n_train+n_val:]
-    # normalize to train min-max
-    if min_max_scale:
-        train_min, train_max = train_p.min(), train_p.max()
-        train_p = (train_p - train_min) / (train_max - train_min)
-        train_t = (train_t - train_min) / (train_max - train_min)
-        val_p = (val_p - train_min) / (train_max - train_min)
-        val_t = (val_t - train_min) / (train_max - train_min)
-        test_p = (test_p - train_min) / (train_max - train_min)
-        test_t = (test_t - train_min) / (train_max - train_min)
     # construct a dataset object
     train_ds = TSD(
         name=tensors_path.stem,
@@ -119,6 +210,57 @@ def split_tensors_into_datasets(
         name=tensors_path.stem,
         patches=test_p,
         targets=test_t
+    )
+    # return the datasets
+    return train_ds, val_ds, test_ds
+
+
+def split_tensors_into_ra_datasets(
+        cache_dir: Path,
+        name: str,
+        config: RatConfig
+) -> tuple[RATSD, RATSD, RATSD]:
+    # read tensors
+    tensors_path = cache_dir / f"{name}.safetensors"
+    tensors = {}
+    with safe_open(tensors_path, framework="pt", device="cpu") as f:
+        for key in ("patches", "targets", "nn_idx"):
+            tensors[key] = f.get_tensor(key)
+    # compute the indices
+    n_samples = tensors["patches"].size(0)
+    n_train = int(n_samples * config.train_size)
+    n_val = int(n_samples * config.val_size)
+    # crop out the tensors
+    train_p = tensors["patches"][:n_train]
+    train_t = tensors["targets"][:n_train]
+    train_p_idx = tensors["nn_idx"][:n_train]
+    val_p = tensors["patches"][n_train:n_train+n_val]
+    val_t = tensors["targets"][n_train:n_train+n_val]
+    val_p_idx = tensors["nn_idx"][n_train:n_train+n_val]
+    test_p = tensors["patches"][n_train+n_val:]
+    test_t = tensors["targets"][n_train+n_val:]
+    test_p_idx = tensors["nn_idx"][n_train+n_val:]
+    # construct a dataset object
+    train_ds = RATSD(
+        name=tensors_path.stem,
+        patches=train_p,
+        targets=train_t,
+        train_patches=train_p,
+        nn_idx=train_p_idx
+    )
+    val_ds = RATSD(
+        name=tensors_path.stem,
+        patches=val_p,
+        targets=val_t,
+        train_patches=train_p,
+        nn_idx=val_p_idx
+    )
+    test_ds = RATSD(
+        name=tensors_path.stem,
+        patches=test_p,
+        targets=test_t,
+        train_patches=train_p,
+        nn_idx=test_p_idx
     )
     # return the datasets
     return train_ds, val_ds, test_ds
