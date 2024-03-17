@@ -10,10 +10,10 @@ class RatConfig:
     pos_enc_drop_out: float = 0.1
     reg_head_drop_out: float = 0.2
     num_templates: int = 5
-    learning_rate: float = 3e-4
+    learning_rate: float = 5e-5
     batch_size: int = 4_096
-    epochs: int = 1_000
-    patience: int = 100
+    epochs: int = 10_000
+    patience: int = 1000
     num_workers: int = 4
     train_size: float = 0.7
     val_size: float = 0.1

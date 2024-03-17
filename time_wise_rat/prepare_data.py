@@ -54,6 +54,7 @@ def enrich_tensors_with_neighbors(
 
 
 if __name__ == "__main__":
+    pass
     # enrich_tensors_with_neighbors(
     #     cache_dir=Path("data/cache"),
     #     weights_dir=Path("weights"),

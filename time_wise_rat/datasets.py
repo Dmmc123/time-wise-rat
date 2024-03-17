@@ -168,8 +168,8 @@ class RATSD(Dataset):
     def __getitem__(self, idx: int) -> tuple[Tensor, Tensor, Tensor]:
         return (
             self.patches[idx],
-            self.train_patches[self.nn_idx[idx]],
-            self.targets[idx]
+            self.targets[idx],
+            self.train_patches[self.nn_idx[idx]]
         )
 
 
