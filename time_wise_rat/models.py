@@ -158,6 +158,66 @@ class TemplateAugmentedTransformer(pl.LightningModule):
         return metric_dict
 
 
+class TargetAugmentedTransformer(pl.LightningModule):
+
+    def __init__(self, baseline: Baseline) -> None:
+        super().__init__()
+        self.config = baseline.config
+        # time series encoder
+        self.pos_enc = baseline.pos_enc
+        self.encoder = baseline.encoder
+        # regression head
+        self.head = baseline.head
+        self.target_attn = nn.MultiheadAttention(
+            embed_dim=1,
+            num_heads=1,
+            batch_first=True
+        )
+
+    def forward(self, x: Tensor, y_templ: Tensor) -> Tensor:
+        # encode the original time series
+        out = self.pos_enc(x)
+        out = self.encoder(out)
+        # flat out encoder representations before regression
+        out = out.view(-1, self.config.num_patches * self.config.patch_length)
+        # regress the price
+        out = self.head(out)
+        # correct the price by attending to targets of templates
+        b = x.size(0)
+        out = out.view(b, 1, 1)
+        y_templ = y_templ.view(b, -1, 1)
+        out, _ = self.target_attn(query=out, key=y_templ, value=y_templ)
+        return out
+
+    def configure_optimizers(self) -> torch.optim.Adam:
+        return torch.optim.Adam(self.parameters(), lr=self.config.learning_rate)
+
+    def training_step(self, batch: tuple[Tensor, Tensor, Tensor], batch_idx: int) -> Tensor:
+        src, tgt, templ_tgt = batch
+        pred = self(x=src, y_templ=templ_tgt).view(-1)
+        loss = torch.nn.functional.mse_loss(pred, tgt)
+        self.log("train_mse", loss.item(), sync_dist=True, batch_size=src.size(0))
+        return loss
+
+    def validation_step(self, batch: tuple[Tensor, Tensor, Tensor], batch_idx: int) -> dict[str, float]:
+        src, tgt, templ_tgt = batch
+        pred = self(x=src, y_templ=templ_tgt).view(-1)
+        rmse = root_mean_squared_error(tgt.cpu().numpy(), pred.cpu().numpy())
+        mae = mean_absolute_error(tgt.cpu().numpy(), pred.cpu().numpy())
+        self.log("val_rmse", rmse, sync_dist=True, batch_size=src.size(0))
+        self.log("val_mae", mae, sync_dist=True, batch_size=src.size(0))
+        return {"val_rmse": rmse, "val_mae": mae}
+
+    def test_step(self, batch: tuple[Tensor, Tensor, Tensor], batch_idx: int) -> dict[str, float]:
+        src, tgt, templ_tgt = batch
+        pred = self(x=src, y_templ=templ_tgt).view(-1)
+        rmse = root_mean_squared_error(tgt.cpu().numpy(), pred.cpu().numpy())
+        mae = mean_absolute_error(tgt.cpu().numpy(), pred.cpu().numpy())
+        metric_dict = {"test_rmse": rmse, "test_mae": mae}
+        self.log_dict(metric_dict)
+        return metric_dict
+
+
 if __name__ == "__main__":
     config = RatConfig()
     model = Baseline(config=config)
@@ -166,14 +226,12 @@ if __name__ == "__main__":
         config.num_patches,
         config.patch_length
     )
-    x_templ = torch.rand(
+    y_templ = torch.rand(
         config.batch_size,
-        config.num_templates,
-        config.num_patches,
-        config.patch_length
+        config.num_templates
     )
-    rat = RetrievalAugmentedBaseline(baseline=model)
-    y = rat(x, x_templ)
+    rat = TargetAugmentedTransformer(baseline=model)
+    y = rat(x, y_templ)
     print(y.size())
 
 

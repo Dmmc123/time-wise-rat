@@ -9,7 +9,7 @@ class RatConfig:
     num_layers: int = 3
     pos_enc_drop_out: float = 0.1
     reg_head_drop_out: float = 0.2
-    num_templates: int = 5
+    num_templates: int = 10
     learning_rate: float = 5e-5
     batch_size: int = 4_096
     epochs: int = 10_000

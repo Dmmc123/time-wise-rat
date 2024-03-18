@@ -1,8 +1,10 @@
 from time_wise_rat.datasets import (
     TSProcessor,
     RATSProcessor,
+    TGTProcessor,
     split_tensors_into_datasets,
-    split_tensors_into_ra_datasets
+    split_tensors_into_ra_datasets,
+    split_tensors_into_tgt_datasets
 )
 from time_wise_rat.config import RatConfig
 
@@ -31,6 +33,7 @@ def enrich_tensors_with_neighbors(
         cache_dir: Path,
         weights_dir: Path,
         config: RatConfig,
+        processor: RATSProcessor,
         verbose: bool
 ) -> None:
     # get all tensors
@@ -45,7 +48,7 @@ def enrich_tensors_with_neighbors(
             # print(f"Skipping dataset {tensor_file.stem}, no model")
             continue
         best_ckpt = min(ckpt_files, key=lambda p: float(p.stem.split("=")[-1]))
-        RATSProcessor.run(
+        processor.run(
             cache_dir=cache_dir,
             name=tensor_file.stem,
             config=config,
@@ -54,13 +57,13 @@ def enrich_tensors_with_neighbors(
 
 
 if __name__ == "__main__":
-    pass
-    # enrich_tensors_with_neighbors(
-    #     cache_dir=Path("data/cache"),
-    #     weights_dir=Path("weights"),
-    #     config=RatConfig(),
-    #     verbose=True
-    # )
+    enrich_tensors_with_neighbors(
+        cache_dir=Path("data/cache"),
+        weights_dir=Path("weights"),
+        config=RatConfig(),
+        processor=TGTProcessor(),
+        verbose=True
+    )
     # for t in train_ds[-1]:
     #     print(t)
     # convert_csv_datasets_to_tensors(

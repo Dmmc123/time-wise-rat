@@ -138,6 +138,71 @@ class RATSProcessor:
 
 
 @dataclass
+class TGTProcessor(RATSProcessor):
+
+    @staticmethod
+    def _transform(
+            tensors: dict[str, Tensor],
+            baseline_ckpt_path: Path,
+            config: RatConfig
+    ) -> dict[str, Tensor]:
+        # make loader for training data
+        n_train = int(tensors["patches"].size(0) * config.train_size)
+        p_ds = TensorDataset(tensors["patches"])
+        loader = DataLoader(
+            dataset=p_ds,
+            batch_size=config.batch_size,
+            shuffle=False,
+            num_workers=config.num_workers
+        )
+        # load model and do inference
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        model = Baseline.load_from_checkpoint(
+            checkpoint_path=baseline_ckpt_path,
+            config=config
+        ).to(device)
+        embeddings = []
+        with torch.no_grad():
+            for (batch,) in tqdm.tqdm(loader, desc="Computing embeddings"):
+                # out = model.pos_enc(batch.to(device))
+                out = model.encoder(batch.to(device)).to("cpu")
+                out = out.mean(dim=1).numpy()
+                embeddings.append(out)
+        embeddings = np.concatenate(embeddings, axis=0)
+        train_embs = embeddings[:n_train]
+        # index embeddings
+        index = faiss.IndexFlatIP(train_embs.shape[1])
+        index.add(train_embs)
+        # retrieve nearest neighbors
+        _, nn_idx = index.search(embeddings, k=config.num_templates)
+        nn_idx = torch.tensor(nn_idx, dtype=torch.long)
+        # return enriched tensors
+        tensors["nn_tgt_idx"] = nn_idx
+        return tensors
+
+    @staticmethod
+    def run(
+            cache_dir: Path,
+            name: str,
+            baseline_ckpt_path: Path,
+            config: RatConfig
+    ) -> None:
+        tensors = RATSProcessor._extract(
+            tensor_path=cache_dir / f"{name}.safetensors"
+        )
+        tensors = TGTProcessor._transform(
+            tensors=tensors,
+            baseline_ckpt_path=baseline_ckpt_path,
+            config=config
+        )
+        RATSProcessor._load(
+            cache_dir=cache_dir,
+            name=name,
+            tensors=tensors
+        )
+
+
+@dataclass
 class TSD(Dataset):
     """Time Series Dataset"""
 
@@ -153,7 +218,7 @@ class TSD(Dataset):
 
 
 @dataclass
-class RATSD(Dataset):
+class TemplateDataset(Dataset):
     """Retrieval Augmented Time Series Dataset"""
 
     name: str = field(repr=True, init=True)
@@ -170,6 +235,27 @@ class RATSD(Dataset):
             self.patches[idx],
             self.targets[idx],
             self.train_patches[self.nn_idx[idx]]
+        )
+
+
+@dataclass
+class TargetDataset(Dataset):
+    """Retrieval Augmented Time Series Dataset"""
+
+    name: str = field(repr=True, init=True)
+    patches: Tensor = field(repr=False, init=True)
+    targets: Tensor = field(repr=False, init=True)
+    train_targets: Tensor = field(repr=False, init=True)
+    nn_tgt_idx: Tensor = field(repr=False, init=True)
+
+    def __len__(self) -> int:
+        return self.patches.size(0)
+
+    def __getitem__(self, idx: int) -> tuple[Tensor, Tensor, Tensor]:
+        return (
+            self.patches[idx],
+            self.targets[idx],
+            self.train_targets[self.nn_tgt_idx[idx]]
         )
 
 
@@ -219,7 +305,7 @@ def split_tensors_into_ra_datasets(
         cache_dir: Path,
         name: str,
         config: RatConfig
-) -> tuple[RATSD, RATSD, RATSD]:
+) -> tuple[TemplateDataset, TemplateDataset, TemplateDataset]:
     # read tensors
     tensors_path = cache_dir / f"{name}.safetensors"
     tensors = {}
@@ -241,26 +327,77 @@ def split_tensors_into_ra_datasets(
     test_t = tensors["targets"][n_train+n_val:]
     test_p_idx = tensors["nn_idx"][n_train+n_val:]
     # construct a dataset object
-    train_ds = RATSD(
+    train_ds = TemplateDataset(
         name=tensors_path.stem,
         patches=train_p,
         targets=train_t,
         train_patches=train_p,
         nn_idx=train_p_idx
     )
-    val_ds = RATSD(
+    val_ds = TemplateDataset(
         name=tensors_path.stem,
         patches=val_p,
         targets=val_t,
         train_patches=train_p,
         nn_idx=val_p_idx
     )
-    test_ds = RATSD(
+    test_ds = TemplateDataset(
         name=tensors_path.stem,
         patches=test_p,
         targets=test_t,
         train_patches=train_p,
         nn_idx=test_p_idx
+    )
+    # return the datasets
+    return train_ds, val_ds, test_ds
+
+
+def split_tensors_into_tgt_datasets(
+        cache_dir: Path,
+        name: str,
+        config: RatConfig
+) -> tuple[TargetDataset, TargetDataset, TargetDataset]:
+    # read tensors
+    tensors_path = cache_dir / f"{name}.safetensors"
+    tensors = {}
+    with safe_open(tensors_path, framework="pt", device="cpu") as f:
+        for key in ("patches", "targets", "nn_tgt_idx"):
+            tensors[key] = f.get_tensor(key)
+    # compute the indices
+    n_samples = tensors["patches"].size(0)
+    n_train = int(n_samples * config.train_size)
+    n_val = int(n_samples * config.val_size)
+    # crop out the tensors
+    train_p = tensors["patches"][:n_train]
+    train_t = tensors["targets"][:n_train]
+    train_tgt_idx = tensors["nn_tgt_idx"][:n_train]
+    val_p = tensors["patches"][n_train:n_train+n_val]
+    val_t = tensors["targets"][n_train:n_train+n_val]
+    val_tgt_idx = tensors["nn_tgt_idx"][n_train:n_train+n_val]
+    test_p = tensors["patches"][n_train+n_val:]
+    test_t = tensors["targets"][n_train+n_val:]
+    test_tgt_idx = tensors["nn_tgt_idx"][n_train+n_val:]
+    # construct a dataset object
+    train_ds = TargetDataset(
+        name=tensors_path.stem,
+        patches=train_p,
+        targets=train_t,
+        train_targets=train_t,
+        nn_tgt_idx=train_tgt_idx
+    )
+    val_ds = TargetDataset(
+        name=tensors_path.stem,
+        patches=val_p,
+        targets=val_t,
+        train_targets=train_t,
+        nn_tgt_idx=val_tgt_idx
+    )
+    test_ds = TargetDataset(
+        name=tensors_path.stem,
+        patches=test_p,
+        targets=test_t,
+        train_targets=train_t,
+        nn_tgt_idx=test_tgt_idx
     )
     # return the datasets
     return train_ds, val_ds, test_ds
