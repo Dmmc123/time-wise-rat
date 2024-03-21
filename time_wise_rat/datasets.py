@@ -159,7 +159,7 @@ class TGTProcessor(ContextProcessor):
         )
         # load model and do inference
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        model = Baseline.load_from_checkpoint(
+        model = FullTransformer.load_from_checkpoint(
             checkpoint_path=baseline_ckpt_path,
             config=config
         ).to(device)
@@ -349,57 +349,6 @@ def split_tensors_into_ra_datasets(
         targets=test_t,
         train_patches=train_p,
         nn_idx=test_p_idx
-    )
-    # return the datasets
-    return train_ds, val_ds, test_ds
-
-
-def split_tensors_into_tgt_datasets(
-        cache_dir: Path,
-        name: str,
-        config: RatConfig
-) -> tuple[TargetDataset, TargetDataset, TargetDataset]:
-    # read tensors
-    tensors_path = cache_dir / f"{name}.safetensors"
-    tensors = {}
-    with safe_open(tensors_path, framework="pt", device="cpu") as f:
-        for key in ("patches", "targets", "nn_tgt_idx"):
-            tensors[key] = f.get_tensor(key)
-    # compute the indices
-    n_samples = tensors["patches"].size(0)
-    n_train = int(n_samples * config.train_size)
-    n_val = int(n_samples * config.val_size)
-    # crop out the tensors
-    train_p = tensors["patches"][:n_train]
-    train_t = tensors["targets"][:n_train]
-    train_tgt_idx = tensors["nn_tgt_idx"][:n_train]
-    val_p = tensors["patches"][n_train:n_train+n_val]
-    val_t = tensors["targets"][n_train:n_train+n_val]
-    val_tgt_idx = tensors["nn_tgt_idx"][n_train:n_train+n_val]
-    test_p = tensors["patches"][n_train+n_val:]
-    test_t = tensors["targets"][n_train+n_val:]
-    test_tgt_idx = tensors["nn_tgt_idx"][n_train+n_val:]
-    # construct a dataset object
-    train_ds = TargetDataset(
-        name=tensors_path.stem,
-        patches=train_p,
-        targets=train_t,
-        train_targets=train_t,
-        nn_tgt_idx=train_tgt_idx
-    )
-    val_ds = TargetDataset(
-        name=tensors_path.stem,
-        patches=val_p,
-        targets=val_t,
-        train_targets=train_t,
-        nn_tgt_idx=val_tgt_idx
-    )
-    test_ds = TargetDataset(
-        name=tensors_path.stem,
-        patches=test_p,
-        targets=test_t,
-        train_targets=train_t,
-        nn_tgt_idx=test_tgt_idx
     )
     # return the datasets
     return train_ds, val_ds, test_ds

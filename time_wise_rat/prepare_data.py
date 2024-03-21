@@ -3,8 +3,7 @@ from time_wise_rat.datasets import (
     ContextProcessor,
     TGTProcessor,
     split_tensors_into_datasets,
-    split_tensors_into_ra_datasets,
-    split_tensors_into_tgt_datasets
+    split_tensors_into_ra_datasets
 )
 from time_wise_rat.config import RatConfig
 

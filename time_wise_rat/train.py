@@ -3,8 +3,7 @@ import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
 from time_wise_rat.datasets import (
     split_tensors_into_datasets,
-    split_tensors_into_ra_datasets,
-    split_tensors_into_tgt_datasets
+    split_tensors_into_ra_datasets
 )
 from time_wise_rat.models import (
     Baseline,
@@ -144,14 +143,11 @@ def train_retrieval_augmented_baseline(
     best_baseline_ckpt = min(ckpt_files, key=lambda p: float(p.stem.split("=")[-1]))
     model = FullTransformer.load_from_checkpoint(
         checkpoint_path=best_baseline_ckpt,
-        config=config,
-        strict=False
+        config=config
     )
-    model.pos_enc = PositionalEncoding(
-        d_model=config.patch_length,
-        drop_out=config.pos_enc_drop_out,
-        max_len=config.num_patches*config.context_len
-    )
+    # make adjustments for training
+    for p in model.encoder.parameters():
+        p.requires_grad = False
     # train the model
     return train(
         model=model,
@@ -160,57 +156,6 @@ def train_retrieval_augmented_baseline(
         logs_dir=logs_dir,
         dataset_name=dataset_name,
         model_name="RetrivalAugmentedFT",
-        train_loader=train_loader,
-        val_loader=val_loader,
-        test_loader=test_loader
-    )
-
-
-def train_knn_transformer(
-        cache_dir: Path,
-        dataset_name: str,
-        weights_dir: Path,
-        logs_dir: Path,
-        config: RatConfig
-) -> Mapping[str, float]:
-    # construct data loaders
-    train_ds, val_ds, test_ds = split_tensors_into_tgt_datasets(
-        cache_dir=cache_dir,
-        name=dataset_name,
-        config=config
-    )
-    train_loader = DataLoader(
-        dataset=train_ds,
-        num_workers=config.num_workers,
-        batch_size=config.batch_size,
-        shuffle=True
-    )
-    val_loader = DataLoader(
-        dataset=val_ds,
-        num_workers=config.num_workers,
-        batch_size=config.batch_size
-    )
-    test_loader = DataLoader(
-        test_ds,
-        num_workers=config.num_workers,
-        batch_size=config.batch_size
-    )
-    # initialize the model
-    ckpt_files = (weights_dir / "Baseline" / dataset_name).glob("*.ckpt")
-    best_baseline_ckpt = min(ckpt_files, key=lambda p: float(p.stem.split("=")[-1]))
-    baseline = Baseline.load_from_checkpoint(
-        checkpoint_path=best_baseline_ckpt,
-        config=config
-    )
-    model = TargetAugmentedTransformer(baseline=baseline)
-    # train the model
-    return train(
-        model=model,
-        config=config,
-        weights_dir=weights_dir,
-        logs_dir=logs_dir,
-        dataset_name=dataset_name,
-        model_name="KNNTransformer",
         train_loader=train_loader,
         val_loader=val_loader,
         test_loader=test_loader

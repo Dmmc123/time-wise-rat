@@ -17,7 +17,7 @@ class PositionalEncoding(nn.Module):
             self,
             d_model: int,
             drop_out: float = 0.1,
-            max_len: int = 1_024
+            max_len: int = 4_096
     ) -> None:
         super().__init__()
         self.dropout = nn.Dropout(p=drop_out)
@@ -321,6 +321,7 @@ class FullTransformer(pl.LightningModule):
 if __name__ == "__main__":
     config = RatConfig()
     model = FullTransformer(config=config).cuda()
+    print(model.pos_enc.pe.size())
     x = torch.rand(
         config.batch_size,
         config.num_patches,
