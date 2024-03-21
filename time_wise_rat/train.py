@@ -8,8 +8,10 @@ from time_wise_rat.datasets import (
 )
 from time_wise_rat.models import (
     Baseline,
+    FullTransformer,
     TemplateAugmentedTransformer,
-    TargetAugmentedTransformer
+    TargetAugmentedTransformer,
+    PositionalEncoding
 )
 from pytorch_lightning.loggers import TensorBoardLogger
 from time_wise_rat.config import RatConfig
@@ -93,7 +95,7 @@ def train_baseline(
         batch_size=config.batch_size
     )
     # initialize the model
-    model = Baseline(config=config)
+    model = FullTransformer(config=config)
     # train the model
     return train(
         model=model,
@@ -101,7 +103,7 @@ def train_baseline(
         weights_dir=weights_dir,
         logs_dir=logs_dir,
         dataset_name=dataset_name,
-        model_name="Baseline",
+        model_name="FullTransformer",
         train_loader=train_loader,
         val_loader=val_loader,
         test_loader=test_loader
@@ -138,13 +140,18 @@ def train_retrieval_augmented_baseline(
         batch_size=config.batch_size
     )
     # initialize the model
-    ckpt_files = (weights_dir / "Baseline" / dataset_name).glob("*.ckpt")
+    ckpt_files = (weights_dir / "FullTransformer" / dataset_name).glob("*.ckpt")
     best_baseline_ckpt = min(ckpt_files, key=lambda p: float(p.stem.split("=")[-1]))
-    baseline = Baseline.load_from_checkpoint(
+    model = FullTransformer.load_from_checkpoint(
         checkpoint_path=best_baseline_ckpt,
-        config=config
+        config=config,
+        strict=False
     )
-    model = TemplateAugmentedTransformer(baseline=baseline)
+    model.pos_enc = PositionalEncoding(
+        d_model=config.patch_length,
+        drop_out=config.pos_enc_drop_out,
+        max_len=config.num_patches*config.context_len
+    )
     # train the model
     return train(
         model=model,
@@ -152,7 +159,7 @@ def train_retrieval_augmented_baseline(
         weights_dir=weights_dir,
         logs_dir=logs_dir,
         dataset_name=dataset_name,
-        model_name="RAT",
+        model_name="RetrivalAugmentedFT",
         train_loader=train_loader,
         val_loader=val_loader,
         test_loader=test_loader
@@ -211,7 +218,7 @@ def train_knn_transformer(
 
 
 if __name__ == "__main__":
-    train_knn_transformer(
+    train_retrieval_augmented_baseline(
         cache_dir=Path("data/cache"),
         dataset_name="btc",
         weights_dir=Path("weights"),

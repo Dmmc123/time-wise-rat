@@ -1,6 +1,6 @@
 from time_wise_rat.datasets import (
     TSProcessor,
-    RATSProcessor,
+    ContextProcessor,
     TGTProcessor,
     split_tensors_into_datasets,
     split_tensors_into_ra_datasets,
@@ -33,7 +33,7 @@ def enrich_tensors_with_neighbors(
         cache_dir: Path,
         weights_dir: Path,
         config: RatConfig,
-        processor: RATSProcessor,
+        processor: ContextProcessor,
         verbose: bool
 ) -> None:
     # get all tensors
@@ -43,9 +43,9 @@ def enrich_tensors_with_neighbors(
         tensor_files = tqdm.tqdm(tensor_files, desc="Processing tensor datasets")
     # run preprocessing jobs
     for tensor_file in tensor_files:
-        ckpt_files = list((weights_dir / "Baseline" / tensor_file.stem).glob("*.ckpt"))
+        ckpt_files = list((weights_dir / "FullTransformer" / tensor_file.stem).glob("*.ckpt"))
         if len(ckpt_files) == 0:
-            # print(f"Skipping dataset {tensor_file.stem}, no model")
+            print(f"Skipping dataset {tensor_file.stem}, no model")
             continue
         best_ckpt = min(ckpt_files, key=lambda p: float(p.stem.split("=")[-1]))
         processor.run(
@@ -61,11 +61,9 @@ if __name__ == "__main__":
         cache_dir=Path("data/cache"),
         weights_dir=Path("weights"),
         config=RatConfig(),
-        processor=TGTProcessor(),
+        processor=ContextProcessor(),
         verbose=True
     )
-    # for t in train_ds[-1]:
-    #     print(t)
     # convert_csv_datasets_to_tensors(
     #     csv_dir=Path("data/raw"),
     #     cache_dir=Path("data/cache"),

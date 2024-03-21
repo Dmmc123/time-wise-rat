@@ -1,5 +1,6 @@
 from time_wise_rat.config import RatConfig
 from torch import Tensor, nn
+from typing import Optional
 from sklearn.metrics import (
     root_mean_squared_error,
     mean_absolute_error
@@ -218,20 +219,122 @@ class TargetAugmentedTransformer(pl.LightningModule):
         return metric_dict
 
 
+class FullTransformer(pl.LightningModule):
+
+    def __init__(self, config: RatConfig) -> None:
+        super().__init__()
+        self.config = config
+        # time series encoder
+        self.pos_enc = PositionalEncoding(
+            d_model=config.patch_length,
+            drop_out=config.pos_enc_drop_out,
+            max_len=config.num_patches*config.context_len
+        )
+        encoder_layer = nn.TransformerEncoderLayer(
+            d_model=config.patch_length,
+            nhead=config.num_patches // 4,
+            dim_feedforward=config.dim_fc,
+            batch_first=True
+        )
+        self.encoder = nn.TransformerEncoder(
+            encoder_layer=encoder_layer,
+            num_layers=config.num_layers,
+            enable_nested_tensor=False
+        )
+        decoder_layer = nn.TransformerDecoderLayer(
+            d_model=config.patch_length,
+            nhead=config.num_patches // 4,
+            dim_feedforward=config.dim_fc,
+            batch_first=True
+        )
+        self.decoder = nn.TransformerDecoder(
+            decoder_layer=decoder_layer,
+            num_layers=config.num_layers
+        )
+        # regression head
+        self.head = nn.Sequential(
+            nn.Dropout(p=config.reg_head_drop_out),
+            nn.Linear(config.num_patches * config.patch_length, 1)
+        )
+
+    def forward(self, x: Tensor, c: Optional[Tensor] = None) -> Tensor:
+        # encode the time series
+        x = self.pos_enc(x)
+        x = self.encoder(x)
+        # form the context
+        if c is not None:
+            bs, con, np, p = c.size()
+            c = c.view(bs, (con*np), p)
+            c = self.pos_enc(c)
+            c = self.encoder(c)
+        else:
+            c = x
+        # decode the time series
+        x = self.decoder(x, c)
+        # flat out encoder representations before regression
+        x = x.view(-1, self.config.num_patches * self.config.patch_length)
+        # regress the price
+        x = self.head(x)
+        return x
+
+    def configure_optimizers(self) -> torch.optim.Adam:
+        return torch.optim.Adam(self.parameters(), lr=self.config.learning_rate)
+
+    def training_step(self, batch: tuple, batch_idx: int) -> Tensor:
+        src, tgt, cnt = None, None, None
+        if len(batch) == 2:
+            src, tgt = batch
+        elif len(batch) == 3:
+            src, tgt, cnt = batch
+        pred = self(x=src, c=cnt).view(-1)
+        loss = torch.nn.functional.mse_loss(pred, tgt)
+        self.log("train_mse", loss.item(), sync_dist=True, batch_size=src.size(0))
+        return loss
+
+    def validation_step(self, batch: tuple, batch_idx: int) -> dict[str, float]:
+        src, tgt, cnt = None, None, None
+        if len(batch) == 2:
+            src, tgt = batch
+        elif len(batch) == 3:
+            src, tgt, cnt = batch
+        pred = self(x=src, c=cnt).view(-1)
+        rmse = root_mean_squared_error(tgt.cpu().numpy(), pred.cpu().numpy())
+        mae = mean_absolute_error(tgt.cpu().numpy(), pred.cpu().numpy())
+        self.log("val_rmse", rmse, sync_dist=True, batch_size=src.size(0))
+        self.log("val_mae", mae, sync_dist=True, batch_size=src.size(0))
+        return {"val_rmse": rmse, "val_mae": mae}
+
+    def test_step(self, batch: tuple, batch_idx: int) -> dict[str, float]:
+        src, tgt, cnt = None, None, None
+        if len(batch) == 2:
+            src, tgt = batch
+        elif len(batch) == 3:
+            src, tgt, cnt = batch
+        pred = self(x=src, c=cnt).view(-1)
+        rmse = root_mean_squared_error(tgt.cpu().numpy(), pred.cpu().numpy())
+        mae = mean_absolute_error(tgt.cpu().numpy(), pred.cpu().numpy())
+        metric_dict = {"test_rmse": rmse, "test_mae": mae}
+        self.log_dict(metric_dict)
+        return metric_dict
+
+
 if __name__ == "__main__":
     config = RatConfig()
-    model = Baseline(config=config)
+    model = FullTransformer(config=config).cuda()
     x = torch.rand(
         config.batch_size,
         config.num_patches,
         config.patch_length
-    )
-    y_templ = torch.rand(
+    ).cuda()
+    c = torch.rand(
         config.batch_size,
-        config.num_templates
-    )
-    rat = TargetAugmentedTransformer(baseline=model)
-    y = rat(x, y_templ)
+        config.context_len,
+        config.num_patches,
+        config.patch_length
+    ).cuda()
+    y = model(x)
     print(y.size())
+    y2 = model(x, c)
+    print(y2.size())
 
 

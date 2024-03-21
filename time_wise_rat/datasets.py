@@ -7,7 +7,7 @@ import tqdm
 from torch.utils.data import Dataset, DataLoader, TensorDataset
 from time_wise_rat.utils import construct_patches
 from time_wise_rat.config import RatConfig
-from time_wise_rat.models import Baseline
+from time_wise_rat.models import FullTransformer
 from dataclasses import dataclass, field
 from safetensors.torch import save_file
 from safetensors import safe_open
@@ -61,7 +61,7 @@ class TSProcessor:
 
 
 @dataclass
-class RATSProcessor:
+class ContextProcessor:
 
     @staticmethod
     def _extract(tensor_path: Path) -> dict[str, Tensor]:
@@ -88,15 +88,17 @@ class RATSProcessor:
         )
         # load model and do inference
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        model = Baseline.load_from_checkpoint(
+        model = FullTransformer.load_from_checkpoint(
             checkpoint_path=baseline_ckpt_path,
             config=config
         ).to(device)
         embeddings = []
         with torch.no_grad():
             for (batch,) in tqdm.tqdm(loader, desc="Computing embeddings"):
-                out = model.encoder(batch.to(device)).to("cpu")
-                out = out.mean(dim=1).numpy()
+                b = batch.size(0)
+                out = model.pos_enc(batch.to(device))
+                out = model.encoder(out).to("cpu")
+                out = out.view(b, -1).numpy()
                 embeddings.append(out)
         embeddings = np.concatenate(embeddings, axis=0)
         train_embs = embeddings[:n_train]
@@ -104,7 +106,7 @@ class RATSProcessor:
         index = faiss.IndexFlatIP(train_embs.shape[1])
         index.add(train_embs)
         # retrieve nearest neighbors
-        _, nn_idx = index.search(embeddings, k=config.num_templates)
+        _, nn_idx = index.search(embeddings, k=config.context_len)
         nn_idx = torch.tensor(nn_idx, dtype=torch.long)
         # return enriched tensors
         tensors["nn_idx"] = nn_idx
@@ -122,15 +124,15 @@ class RATSProcessor:
             baseline_ckpt_path: Path,
             config: RatConfig
     ) -> None:
-        tensors = RATSProcessor._extract(
+        tensors = ContextProcessor._extract(
             tensor_path=cache_dir / f"{name}.safetensors"
         )
-        tensors = RATSProcessor._transform(
+        tensors = ContextProcessor._transform(
             tensors=tensors,
             baseline_ckpt_path=baseline_ckpt_path,
             config=config
         )
-        RATSProcessor._load(
+        ContextProcessor._load(
             cache_dir=cache_dir,
             name=name,
             tensors=tensors
@@ -138,7 +140,7 @@ class RATSProcessor:
 
 
 @dataclass
-class TGTProcessor(RATSProcessor):
+class TGTProcessor(ContextProcessor):
 
     @staticmethod
     def _transform(
@@ -187,7 +189,7 @@ class TGTProcessor(RATSProcessor):
             baseline_ckpt_path: Path,
             config: RatConfig
     ) -> None:
-        tensors = RATSProcessor._extract(
+        tensors = super()._extract(
             tensor_path=cache_dir / f"{name}.safetensors"
         )
         tensors = TGTProcessor._transform(
@@ -195,7 +197,7 @@ class TGTProcessor(RATSProcessor):
             baseline_ckpt_path=baseline_ckpt_path,
             config=config
         )
-        RATSProcessor._load(
+        super()._load(
             cache_dir=cache_dir,
             name=name,
             tensors=tensors
