@@ -17,4 +17,6 @@ def run_preprocessing(cfg: DataConfig) -> None:
 
 
 if __name__ == "__main__":
+    # python time_wise_rat/data/prepare_data.py -m \
+    #     dataset_name=btc,sp_500,electricity,flu,traffic,weather
     run_preprocessing()
