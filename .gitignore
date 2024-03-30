@@ -2,5 +2,6 @@
 **/__pycache__/
 **/.ipynb_checkpoints/
 data/cache/
+data/raw/datasets.zip
 weights/
 runs/
