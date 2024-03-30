@@ -4,7 +4,7 @@ from typing import Union
 
 @dataclass
 class DataConfig:
-    dataset_name: str
+    dataset_name: str = "btc"
     window_length: int = 32
     patch_length: int = 16
     csv_dir: str = "data/raw"

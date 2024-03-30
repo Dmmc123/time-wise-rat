@@ -1,8 +1,4 @@
 from abc import ABC, abstractmethod
-from time_wise_rat.configs import (
-    ModelConfig,
-    DataConfig
-)
 from typing import Optional
 from torch import Tensor
 

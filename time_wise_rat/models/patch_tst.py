@@ -1,10 +1,12 @@
-from time_wise_rat.configs.augmentation_config import AugmentationConfig
 from time_wise_rat.models import BaselineModel
 from time_wise_rat.configs import (
-    AugmentationConfig,
     ModelConfig,
     TrainConfig,
     DataConfig
+)
+from sklearn.metrics import (
+    root_mean_squared_error,
+    mean_absolute_error
 )
 from torch import nn, Tensor
 from typing import Optional
@@ -32,11 +34,17 @@ class PositionalEncoding(nn.Module):
 
 class PatchTST(pl.LightningModule, BaselineModel):
 
-    def __init__(self, data_cfg: DataConfig, model_cfg: ModelConfig) -> None:
+    def __init__(
+            self,
+            data_cfg: DataConfig,
+            model_cfg: ModelConfig,
+            train_cfg: TrainConfig
+    ) -> None:
         # init model and save hp
         super().__init__()
         self.data_cfg = data_cfg
         self.model_cfg = model_cfg
+        self.train_cfg = train_cfg
         self.save_hyperparameters()
         # model layers
         self.pos_enc = PositionalEncoding(
@@ -86,29 +94,43 @@ class PatchTST(pl.LightningModule, BaselineModel):
         y = self.decode(x_emb, x_cnt)
         return y
 
+    def configure_optimizers(self) -> dict:
+        optimizer = torch.optim.Adam(
+            params=self.parameters(),
+            lr=self.train_cfg.learning_rate
+        )
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer=optimizer,
+            patience=self.train_cfg.scheduler_patience,
+            factor=self.train_cfg.scheduling_factor
+        )
+        return {
+            "optimizer": optimizer,
+            "lr_scheduler": scheduler,
+            "monitor": "val_rmse"
+        }
 
-if __name__ == "__main__":
-    data_cfg = DataConfig(dataset_name="aboba")
-    model_cfg = ModelConfig(model_name="saas")
-    train_cfg = TrainConfig()
-    aug_cfg = AugmentationConfig(aug_name="terra")
-    device = torch.device("cuda")
+    def training_step(self, batch: tuple, batch_idx: int) -> Tensor:
+        src, tgt, cnt = batch
+        pred = self(src, cnt).view(-1)
+        loss = torch.nn.functional.mse_loss(pred, tgt)
+        self.log("train_mse", loss.item(), sync_dist=True, batch_size=src.size(0))
+        return loss
 
-    model = PatchTST(data_cfg=data_cfg, model_cfg=model_cfg).to(device)
-    n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    def validation_step(self, batch: tuple, batch_idx: int) -> dict[str, float]:
+        src, tgt, cnt = batch
+        pred = self(src, cnt).view(-1)
+        rmse = root_mean_squared_error(tgt.cpu().numpy(), pred.cpu().numpy())
+        mae = mean_absolute_error(tgt.cpu().numpy(), pred.cpu().numpy())
+        self.log("val_rmse", rmse, sync_dist=True, batch_size=src.size(0))
+        self.log("val_mae", mae, sync_dist=True, batch_size=src.size(0))
+        return {"val_rmse": rmse, "val_mae": mae}
 
-    x = torch.rand(
-        train_cfg.batch_size,
-        data_cfg.window_length,
-        data_cfg.patch_length
-    ).to(device)
-    x_cnt = torch.rand(
-        train_cfg.batch_size,
-        data_cfg.window_length * aug_cfg.n_neighbors,
-        data_cfg.patch_length
-    ).to(device)
-
-    y_1 = model(x)
-    y_2 = model(x, x_cnt)
-
-    print(y_1.size(), y_2.size())
+    def test_step(self, batch: tuple, batch_idx: int) -> dict[str, float]:
+        src, tgt, cnt = batch
+        pred = self(src, cnt).view(-1)
+        rmse = root_mean_squared_error(tgt.cpu().numpy(), pred.cpu().numpy())
+        mae = mean_absolute_error(tgt.cpu().numpy(), pred.cpu().numpy())
+        metric_dict = {"test_rmse": rmse, "test_mae": mae}
+        self.log_dict(metric_dict)
+        return metric_dict

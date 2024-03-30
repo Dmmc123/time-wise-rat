@@ -1,49 +1,59 @@
-import pytorch_lightning as pl
-
 from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
-from time_wise_rat.data.datasets import (
-    split_tensors_into_datasets,
-    split_tensors_into_ra_datasets
-)
-from time_wise_rat.models.models import (
-    FullTransformer
-)
 from pytorch_lightning.loggers import TensorBoardLogger
-from time_wise_rat.config import RatConfig
-from torch.utils.data import DataLoader
+from hydra.core.config_store import ConfigStore
+from time_wise_rat.data import DataManager
+from time_wise_rat.models import PatchTST
+from time_wise_rat.configs import (
+    ExperimentConfig
+)
 from typing import Mapping
 from pathlib import Path
 
+import pytorch_lightning as pl
+import hydra
 
-def train(
-        model: pl.LightningModule,
-        config: RatConfig,
-        weights_dir: Path,
-        logs_dir: Path,
-        dataset_name: str,
-        model_name: str,
-        train_loader: DataLoader,
-        val_loader: DataLoader,
-        test_loader: DataLoader,
-) -> Mapping[str, float]:
-    # create callbacks
+
+def train(exp_cfg: ExperimentConfig) -> Mapping[str, float]:
+    # load dataloaders
+    data_manager = DataManager(
+        data_cfg=exp_cfg.data_cfg,
+        model_cfg=exp_cfg.model_cfg,
+        train_cfg=exp_cfg.train_cfg
+    )
+    train_ds, val_ds, test_ds = data_manager.get_datasets()
+    train_dl, val_dl, test_dl = data_manager.get_dataloaders(
+        train_ds=train_ds,
+        val_ds=val_ds,
+        test_ds=test_ds
+    )
+    # create (or load from existing) model
+    model = PatchTST(
+        data_cfg=exp_cfg.data_cfg,
+        model_cfg=exp_cfg.model_cfg,
+        train_cfg=exp_cfg.train_cfg
+    )
+    # create training callbacks
+    weights_dir = Path(exp_cfg.train_cfg.weights_dir)
+    weights_dir.mkdir(parents=True, exist_ok=True)
+    ckpt_dir = weights_dir / exp_cfg.model_cfg.model_name / exp_cfg.data_cfg.dataset_name
     checkpoint = ModelCheckpoint(
-        dirpath=weights_dir / model_name / dataset_name,
+        dirpath=ckpt_dir,
         monitor="val_rmse",
         save_top_k=3,
         filename="{epoch}-{val_rmse:.4f}"
     )
+    logs_dir = Path(exp_cfg.train_cfg.logs_dir) / exp_cfg.model_cfg.model_name / exp_cfg.data_cfg.dataset_name
     tb_logger = TensorBoardLogger(
         save_dir=logs_dir,
-        name=f"{model_name}/{dataset_name}"
+        name="logs"
     )
     early_stopping = EarlyStopping(
         monitor="val_rmse",
-        patience=config.patience
+        patience=exp_cfg.train_cfg.early_stopping_patience
     )
     # create trainer object
     trainer = pl.Trainer(
-        max_epochs=config.epochs,
+        max_epochs=exp_cfg.train_cfg.epochs,
         callbacks=[checkpoint, early_stopping],
         logger=tb_logger,
         enable_progress_bar=False,
@@ -52,117 +62,22 @@ def train(
     # fit the model
     trainer.fit(
         model=model,
-        train_dataloaders=train_loader,
-        val_dataloaders=val_loader
+        train_dataloaders=train_dl,
+        val_dataloaders=val_dl
     )
     # evaluate the model
-    metrics = trainer.test(dataloaders=test_loader)
+    metrics = trainer.test(dataloaders=test_dl)
     return metrics[0]
 
 
-def train_baseline(
-        cache_dir: Path,
-        dataset_name: str,
-        weights_dir: Path,
-        logs_dir: Path,
-        config: RatConfig
-) -> Mapping[str, float]:
-    # construct data loaders
-    train_ds, val_ds, test_ds = split_tensors_into_datasets(
-        cache_dir=cache_dir,
-        name=dataset_name,
-        config=config
-    )
-    train_loader = DataLoader(
-        dataset=train_ds,
-        num_workers=config.num_workers,
-        batch_size=config.batch_size,
-        shuffle=True
-    )
-    val_loader = DataLoader(
-        dataset=val_ds,
-        num_workers=config.num_workers,
-        batch_size=config.batch_size
-    )
-    test_loader = DataLoader(
-        test_ds,
-        num_workers=config.num_workers,
-        batch_size=config.batch_size
-    )
-    # initialize the model
-    model = FullTransformer(config=config)
-    # train the model
-    return train(
-        model=model,
-        config=config,
-        weights_dir=weights_dir,
-        logs_dir=logs_dir,
-        dataset_name=dataset_name,
-        model_name="FullTransformer",
-        train_loader=train_loader,
-        val_loader=val_loader,
-        test_loader=test_loader
-    )
+cs = ConfigStore.instance()
+cs.store(name="exp", node=ExperimentConfig)
 
 
-def train_retrieval_augmented_baseline(
-        cache_dir: Path,
-        dataset_name: str,
-        weights_dir: Path,
-        logs_dir: Path,
-        config: RatConfig
-) -> Mapping[str, float]:
-    # construct data loaders
-    train_ds, val_ds, test_ds = split_tensors_into_ra_datasets(
-        cache_dir=cache_dir,
-        name=dataset_name,
-        config=config
-    )
-    train_loader = DataLoader(
-        dataset=train_ds,
-        num_workers=config.num_workers,
-        batch_size=config.batch_size,
-        shuffle=True
-    )
-    val_loader = DataLoader(
-        dataset=val_ds,
-        num_workers=config.num_workers,
-        batch_size=config.batch_size
-    )
-    test_loader = DataLoader(
-        test_ds,
-        num_workers=config.num_workers,
-        batch_size=config.batch_size
-    )
-    # initialize the model
-    ckpt_files = (weights_dir / "FullTransformer" / dataset_name).glob("*.ckpt")
-    best_baseline_ckpt = min(ckpt_files, key=lambda p: float(p.stem.split("=")[-1]))
-    model = FullTransformer.load_from_checkpoint(
-        checkpoint_path=best_baseline_ckpt,
-        config=config
-    )
-    # make adjustments for training
-    for p in model.encoder.parameters():
-        p.requires_grad = False
-    # train the model
-    return train(
-        model=model,
-        config=config,
-        weights_dir=weights_dir,
-        logs_dir=logs_dir,
-        dataset_name=dataset_name,
-        model_name="RetrivalAugmentedFT",
-        train_loader=train_loader,
-        val_loader=val_loader,
-        test_loader=test_loader
-    )
+@hydra.main(version_base=None, config_name="exp")
+def run_experiments(cfg: ExperimentConfig) -> None:
+    train(exp_cfg=cfg)
 
 
 if __name__ == "__main__":
-    train_retrieval_augmented_baseline(
-        cache_dir=Path("data/cache"),
-        dataset_name="btc",
-        weights_dir=Path("weights"),
-        logs_dir=Path("runs"),
-        config=RatConfig()
-    )
+    run_experiments()
