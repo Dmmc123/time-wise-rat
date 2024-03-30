@@ -7,7 +7,7 @@ import tqdm
 from torch.utils.data import Dataset, DataLoader, TensorDataset
 from time_wise_rat.data.utils import construct_patches
 from time_wise_rat.config import RatConfig
-from time_wise_rat.models import FullTransformer
+from time_wise_rat.models.models import FullTransformer
 from dataclasses import dataclass, field
 from safetensors.torch import save_file
 from safetensors import safe_open

@@ -1,16 +1,12 @@
 import pytorch_lightning as pl
 
 from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
-from time_wise_rat.datasets import (
+from time_wise_rat.data.datasets import (
     split_tensors_into_datasets,
     split_tensors_into_ra_datasets
 )
-from time_wise_rat.models import (
-    Baseline,
-    FullTransformer,
-    TemplateAugmentedTransformer,
-    TargetAugmentedTransformer,
-    PositionalEncoding
+from time_wise_rat.models.models import (
+    FullTransformer
 )
 from pytorch_lightning.loggers import TensorBoardLogger
 from time_wise_rat.config import RatConfig
