@@ -17,3 +17,10 @@ def construct_windows(
 ) -> np.ndarray:
     array = np.lib.stride_tricks.sliding_window_view(array, window_length)  # (N, L_w)
     return array
+
+
+def get_log_return(array: np.ndarray) -> np.ndarray:
+    num_zeros = np.count_nonzero(array == 0.0)
+    if num_zeros > 0:
+        raise ValueError("elements of array have zeros, can't compute log return")
+    return np.log(array[1:]/array[:-1])
