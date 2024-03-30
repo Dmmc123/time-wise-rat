@@ -66,7 +66,9 @@ class TableToTensorPreprocessor:
             n_prune_window_samples = min(self.config.n_samples, n_window_samples)
         patches_idx = torch.randperm(n_patch_samples)[:n_prune_patch_samples]
         windows_idx = torch.randperm(n_window_samples)[:n_prune_window_samples]
-        # randomly select a subset of dataset if needed
+        # randomly select a subset of dataset while maintaining order
+        patches_idx, _ = torch.sort(patches_idx)
+        windows_idx, _ = torch.sort(windows_idx)
         patches = patches[patches_idx]
         patch_targets = patch_targets[patches_idx]
         windows = windows[windows_idx]
