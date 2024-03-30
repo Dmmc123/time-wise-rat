@@ -81,7 +81,7 @@ class DataManager:
             tgt = torch.stack([b[1] for b in batch])
             cnt = None
             if batch[0][2] is not None:
-                torch.stack([b[2] for b in batch])
+                cnt = torch.stack([b[2] for b in batch])
             return src, tgt, cnt
         train_dl = DataLoader(
             dataset=train_ds,
