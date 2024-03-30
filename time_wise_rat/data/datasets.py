@@ -5,7 +5,7 @@ import torch
 import tqdm
 
 from torch.utils.data import Dataset, DataLoader, TensorDataset
-from time_wise_rat.utils import construct_patches
+from time_wise_rat.data.utils import construct_patches
 from time_wise_rat.config import RatConfig
 from time_wise_rat.models import FullTransformer
 from dataclasses import dataclass, field
