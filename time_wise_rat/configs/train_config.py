@@ -11,4 +11,4 @@ class TrainConfig:
     early_stopping_patience: int = 10
     logs_dir: str = "runs"
     weights_dir: str = "weights"
-    epochs: int = 10
+    epochs: int = 100
