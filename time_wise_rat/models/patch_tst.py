@@ -1,9 +1,5 @@
+from time_wise_rat.configs import ExperimentConfig
 from time_wise_rat.models import BaselineModel
-from time_wise_rat.configs import (
-    ModelConfig,
-    TrainConfig,
-    DataConfig
-)
 from sklearn.metrics import (
     root_mean_squared_error,
     mean_absolute_error
@@ -35,45 +31,39 @@ class PositionalEncoding(nn.Module):
 class PatchTST(pl.LightningModule, BaselineModel):
 
     def __init__(
-            self,
-            data_cfg: DataConfig,
-            model_cfg: ModelConfig,
-            train_cfg: TrainConfig
-    ) -> None:
+            self, cfg: ExperimentConfig) -> None:
         # init model and save hp
         super().__init__()
-        self.data_cfg = data_cfg
-        self.model_cfg = model_cfg
-        self.train_cfg = train_cfg
+        self.cfg = cfg
         self.save_hyperparameters()
         # model layers
         self.pos_enc = PositionalEncoding(
-            d_model=data_cfg.patch_length
+            d_model=cfg.data.patch_length
         )
         encoder_layer = nn.TransformerEncoderLayer(
-            d_model=data_cfg.patch_length,
+            d_model=cfg.data.patch_length,
             nhead=1,  # single head self-attention
-            dim_feedforward=model_cfg.dim_fc,
+            dim_feedforward=cfg.model.dim_fc,
             batch_first=True
         )
         self.encoder = nn.TransformerEncoder(
             encoder_layer=encoder_layer,
-            num_layers=model_cfg.num_layers,
+            num_layers=cfg.model.num_layers,
             enable_nested_tensor=False
         )
         decoder_layer = nn.TransformerDecoderLayer(
-            d_model=data_cfg.patch_length,
+            d_model=cfg.data.patch_length,
             nhead=1,  # single head self-attention
-            dim_feedforward=model_cfg.dim_fc,
+            dim_feedforward=cfg.model.dim_fc,
             batch_first=True
         )
         self.decoder = nn.TransformerDecoder(
             decoder_layer=decoder_layer,
-            num_layers=model_cfg.num_layers
+            num_layers=cfg.model.num_layers
         )
         self.head = nn.Sequential(
-            nn.Dropout(p=model_cfg.dropout),
-            nn.Linear(data_cfg.window_length * data_cfg.patch_length, 1)
+            nn.Dropout(p=cfg.model.dropout),
+            nn.Linear(cfg.data.window_length * cfg.data.patch_length, 1)
         )
 
     def encode(self, x: Tensor) -> Tensor:
@@ -85,7 +75,7 @@ class PatchTST(pl.LightningModule, BaselineModel):
         if x_cnt is None:  # pretraining
             x_cnt = x_emb.clone()
         x = self.decoder(x_emb, x_cnt)
-        x = x.view(-1, self.data_cfg.window_length * self.data_cfg.patch_length)
+        x = x.view(-1, self.cfg.data.window_length * self.cfg.data.patch_length)
         y = self.head(x)
         return y
 
@@ -97,12 +87,12 @@ class PatchTST(pl.LightningModule, BaselineModel):
     def configure_optimizers(self) -> dict:
         optimizer = torch.optim.Adam(
             params=self.parameters(),
-            lr=self.train_cfg.learning_rate
+            lr=self.cfg.train.learning_rate
         )
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
             optimizer=optimizer,
-            patience=self.train_cfg.scheduler_patience,
-            factor=self.train_cfg.scheduling_factor
+            patience=self.cfg.train.scheduler_patience,
+            factor=self.cfg.train.scheduling_factor
         )
         return {
             "optimizer": optimizer,
@@ -132,5 +122,5 @@ class PatchTST(pl.LightningModule, BaselineModel):
         rmse = root_mean_squared_error(tgt.cpu().numpy(), pred.cpu().numpy())
         mae = mean_absolute_error(tgt.cpu().numpy(), pred.cpu().numpy())
         metric_dict = {"test_rmse": rmse, "test_mae": mae}
-        self.log_dict(metric_dict)
+        self.log_dict(metric_dict, batch_size=src.size(0))
         return metric_dict
