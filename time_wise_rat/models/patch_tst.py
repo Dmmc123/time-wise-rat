@@ -74,6 +74,9 @@ class PatchTST(pl.LightningModule, BaselineModel):
     def decode(self, x_emb: Tensor, x_cnt: Optional[Tensor] = None) -> Tensor:
         if x_cnt is None:  # pretraining
             x_cnt = x_emb.clone()
+        else:
+            b, c, n, l = x_cnt.size()
+            x_cnt = x_cnt.view(b, (c*n), l)
         x = self.decoder(x_emb, x_cnt)
         x = x.view(-1, self.cfg.data.window_length * self.cfg.data.patch_length)
         y = self.head(x)
