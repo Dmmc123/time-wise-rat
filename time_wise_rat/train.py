@@ -58,7 +58,7 @@ def train(exp_cfg: ExperimentConfig) -> Mapping[str, float]:
         val_dataloaders=val_dl
     )
     # evaluate the model
-    metrics = trainer.test(dataloaders=test_dl)
+    metrics = trainer.test(dataloaders=test_dl, ckpt_path="best")
     return metrics[0]
 
 
