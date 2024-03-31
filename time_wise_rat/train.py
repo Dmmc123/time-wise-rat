@@ -2,7 +2,10 @@ from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
 from pytorch_lightning.loggers import TensorBoardLogger
 from hydra.core.config_store import ConfigStore
 from time_wise_rat.data import DataManager
-from time_wise_rat.models import PatchTST
+from time_wise_rat.models import (
+    PatchTST,
+    AutoFormer
+)
 from time_wise_rat.configs import (
     ExperimentConfig
 )
@@ -23,7 +26,11 @@ def train(exp_cfg: ExperimentConfig) -> Mapping[str, float]:
         test_ds=test_ds
     )
     # create (or load from existing) model
-    model = PatchTST(cfg=exp_cfg)
+    model_class = {
+        "patchtst": PatchTST,
+        "autoformer": AutoFormer
+    }
+    model = model_class[exp_cfg.model.model_name](cfg=exp_cfg)
     # create training callbacks
     weights_dir = Path(exp_cfg.train.weights_dir)
     weights_dir.mkdir(parents=True, exist_ok=True)

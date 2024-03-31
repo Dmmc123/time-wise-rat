@@ -37,7 +37,8 @@ class DataManager:
     def get_datasets(self) -> tuple[DatasetTS, DatasetTS, DatasetTS]:
         # get keys for tensor values in tensor cache
         src_key, tgt_key = {
-            "patchtst": ("patches", "patch_targets")
+            "patchtst": ("patches", "patch_targets"),
+            "autoformer": ("windows", "window_targets")
         }[self.cfg.model.model_name]
         # read tensors
         tensor_filename = f"{self.cfg.data.dataset_name}.safetensors"
