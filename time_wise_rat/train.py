@@ -22,8 +22,8 @@ import hydra
 def train(exp_cfg: ExperimentConfig) -> Mapping[str, float]:
     # load dataloaders and ra callback
     data_manager = DataManager(cfg=exp_cfg)
-    aug_data_class_name = {
-        "baseline": BaselineDataModule
+    aug_data_class_name, use_pretrain = {
+        "baseline": (BaselineDataModule, False)
     }[exp_cfg.aug.aug_name]
     data_module = aug_data_class_name(
         cfg=exp_cfg,
@@ -35,9 +35,17 @@ def train(exp_cfg: ExperimentConfig) -> Mapping[str, float]:
         "autoformer": AutoFormer
     }
     model = model_class[exp_cfg.model.model_name](cfg=exp_cfg)
-    # create training callbacks
+    # if needed for augmentation - load the best model
     weights_dir = Path(exp_cfg.train.weights_dir)
-    weights_dir.mkdir(parents=True, exist_ok=True)
+    baseline_ckpt_dir = weights_dir / exp_cfg.model.model_name / exp_cfg.data.dataset_name / "baseline"
+    if use_pretrain:
+        model_paths = baseline_ckpt_dir.glob("*.ckpt")
+        best_path = min(model_paths, key=lambda p: float(p.stem.split("=")[-1]))
+        model = model_class[exp_cfg.model.model_name].load_from_checkpoint(
+            best_path,
+            cfg=exp_cfg
+        )
+    # create training callbacks
     ckpt_dir = weights_dir / exp_cfg.model.model_name / exp_cfg.data.dataset_name / exp_cfg.aug.aug_name
     checkpoint = ModelCheckpoint(
         dirpath=ckpt_dir,
