@@ -2,6 +2,9 @@ from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
 from pytorch_lightning.loggers import TensorBoardLogger
 from hydra.core.config_store import ConfigStore
 from time_wise_rat.data import DataManager
+from time_wise_rat.augmentations import (
+    BaselineDataModule
+)
 from time_wise_rat.models import (
     PatchTST,
     AutoFormer
@@ -17,13 +20,14 @@ import hydra
 
 
 def train(exp_cfg: ExperimentConfig) -> Mapping[str, float]:
-    # load dataloaders
+    # load dataloaders and ra callback
     data_manager = DataManager(cfg=exp_cfg)
-    train_ds, val_ds, test_ds = data_manager.get_datasets()
-    train_dl, val_dl, test_dl = data_manager.get_dataloaders(
-        train_ds=train_ds,
-        val_ds=val_ds,
-        test_ds=test_ds
+    aug_data_class_name = {
+        "baseline": BaselineDataModule
+    }[exp_cfg.aug.aug_name]
+    data_module = aug_data_class_name(
+        cfg=exp_cfg,
+        data_manager=data_manager
     )
     # create (or load from existing) model
     model_class = {
@@ -34,14 +38,14 @@ def train(exp_cfg: ExperimentConfig) -> Mapping[str, float]:
     # create training callbacks
     weights_dir = Path(exp_cfg.train.weights_dir)
     weights_dir.mkdir(parents=True, exist_ok=True)
-    ckpt_dir = weights_dir / exp_cfg.model.model_name / exp_cfg.data.dataset_name
+    ckpt_dir = weights_dir / exp_cfg.model.model_name / exp_cfg.data.dataset_name / exp_cfg.aug.aug_name
     checkpoint = ModelCheckpoint(
         dirpath=ckpt_dir,
         monitor="val_rmse",
         save_top_k=3,
         filename="{epoch}-{val_rmse:.4f}"
     )
-    logs_dir = Path(exp_cfg.train.logs_dir) / exp_cfg.model.model_name / exp_cfg.data.dataset_name
+    logs_dir = Path(exp_cfg.train.logs_dir) / exp_cfg.model.model_name / exp_cfg.data.dataset_name / exp_cfg.aug.aug_name
     tb_logger = TensorBoardLogger(
         save_dir=logs_dir,
         name="logs"
@@ -61,11 +65,10 @@ def train(exp_cfg: ExperimentConfig) -> Mapping[str, float]:
     # fit the model
     trainer.fit(
         model=model,
-        train_dataloaders=train_dl,
-        val_dataloaders=val_dl
+        datamodule=data_module
     )
     # evaluate the model
-    metrics = trainer.test(dataloaders=test_dl, ckpt_path="best")
+    metrics = trainer.test(dataloaders=data_module, ckpt_path="best")
     return metrics[0]
 
 

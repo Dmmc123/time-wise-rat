@@ -25,8 +25,6 @@ class DatasetTS(Dataset):
         cnt = None
         if self.nn_emb is not None and self.nn_emb is not None:
             cnt = self.nn_emb[self.nn_idx[idx]]
-            n_c, n, d = cnt.size()
-            cnt = cnt.view((n_c*n), d)  # concat neighbors into one long example
         return src, tgt, cnt
 
 
