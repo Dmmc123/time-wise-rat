@@ -3,7 +3,8 @@ from pytorch_lightning.loggers import TensorBoardLogger
 from hydra.core.config_store import ConfigStore
 from time_wise_rat.data import DataManager
 from time_wise_rat.augmentations import (
-    BaselineDataModule
+    BaselineDataModule,
+    TERADataModule
 )
 from time_wise_rat.models import (
     PatchTST,
@@ -23,7 +24,8 @@ def train(exp_cfg: ExperimentConfig) -> Mapping[str, float]:
     # load dataloaders and ra callback
     data_manager = DataManager(cfg=exp_cfg)
     aug_data_class_name, use_pretrain = {
-        "baseline": (BaselineDataModule, False)
+        "baseline": (BaselineDataModule, False),
+        "tera": (TERADataModule, True)
     }[exp_cfg.aug.aug_name]
     data_module = aug_data_class_name(
         cfg=exp_cfg,

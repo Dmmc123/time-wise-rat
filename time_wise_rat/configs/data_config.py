@@ -12,6 +12,6 @@ class DataConfig:
     non_stat_datasets: list[str] = field(
         default_factory=lambda: ["sp_500"]
     )
-    n_samples: Union[float, int] = 2 ** 15
+    n_samples: Union[float, int] = 1.0
     train_size: float = 0.7
     val_size: float = 0.1

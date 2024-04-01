@@ -1,2 +1,2 @@
 from .baseline import BaselineDataModule
-from .tera import TERA
+from .tera import TERADataModule
