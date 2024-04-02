@@ -35,7 +35,7 @@ class TERADataModule(BaselineDataModule):
         n_train = len(self.train_ds)
         n_val = len(self.val_ds)
         train_embs = embeddings[:n_train]
-        index = faiss.IndexFlatIP(train_embs.shape[1])
+        index = faiss.IndexFlatL2(train_embs.shape[1])
         index.add(train_embs)
         _, nn_idx = index.search(embeddings, k=24)
 
@@ -62,3 +62,7 @@ class TERADataModule(BaselineDataModule):
     def val_dataloader(self):
         self.update_loaders()
         return self.val_dl
+
+    def test_dataloader(self):
+        self.update_loaders()
+        return self.test_dl
