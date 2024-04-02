@@ -1,5 +1,5 @@
 import pytorch_lightning as pl
 
 
-class FEDFormer(pl.LightningModule):
+class FEDformer(pl.LightningModule):
     pass
