@@ -4,7 +4,9 @@ from hydra.core.config_store import ConfigStore
 from time_wise_rat.data import DataManager
 from time_wise_rat.augmentations import (
     BaselineDataModule,
-    TERADataModule
+    TERADataModule,
+    MQRetNNDataModule,
+    RATSFDataModule
 )
 from time_wise_rat.models import (
     PatchTST,
@@ -27,7 +29,9 @@ def train(exp_cfg: ExperimentConfig) -> Mapping[str, float]:
     data_manager = DataManager(cfg=exp_cfg)
     aug_data_class_name, use_pretrain = {
         "baseline": (BaselineDataModule, False),
-        "tera": (TERADataModule, True)
+        "tera": (TERADataModule, True),
+        "mqretnn": (MQRetNNDataModule, True),
+        "ratsf": (RATSFDataModule, False)
     }[exp_cfg.aug.aug_name]
     data_module = aug_data_class_name(
         cfg=exp_cfg,
@@ -43,7 +47,10 @@ def train(exp_cfg: ExperimentConfig) -> Mapping[str, float]:
     model = model_class[exp_cfg.model.model_name](cfg=exp_cfg)
     # if needed for augmentation - load the best model
     weights_dir = Path(exp_cfg.train.weights_dir)
-    baseline_ckpt_dir = weights_dir / exp_cfg.model.model_name / exp_cfg.data.dataset_name / "baseline"
+    baseline_ckpt_dir = (weights_dir /
+                         exp_cfg.model.model_name /
+                         exp_cfg.data.dataset_name /
+                         "baseline")
     if use_pretrain:
         model_paths = baseline_ckpt_dir.glob("*.ckpt")
         best_path = min(model_paths, key=lambda p: float(p.stem.split("=")[-1]))
@@ -52,14 +59,20 @@ def train(exp_cfg: ExperimentConfig) -> Mapping[str, float]:
             cfg=exp_cfg
         )
     # create training callbacks
-    ckpt_dir = weights_dir / exp_cfg.model.model_name / exp_cfg.data.dataset_name / exp_cfg.aug.aug_name
+    ckpt_dir = (weights_dir /
+                exp_cfg.model.model_name /
+                exp_cfg.data.dataset_name /
+                exp_cfg.aug.aug_name)
     checkpoint = ModelCheckpoint(
         dirpath=ckpt_dir,
         monitor="val_rmse",
         save_top_k=3,
         filename="{epoch}-{val_rmse:.4f}"
     )
-    logs_dir = Path(exp_cfg.train.logs_dir) / exp_cfg.model.model_name / exp_cfg.data.dataset_name / exp_cfg.aug.aug_name
+    logs_dir = (Path(exp_cfg.train.logs_dir) /
+                exp_cfg.model.model_name /
+                exp_cfg.data.dataset_name /
+                exp_cfg.aug.aug_name)
     tb_logger = TensorBoardLogger(
         save_dir=logs_dir,
         name="logs"
