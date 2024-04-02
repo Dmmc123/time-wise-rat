@@ -39,7 +39,6 @@ class TERADataModule(BaselineDataModule):
         _, nn_idx = index.search(embeddings, k=24)
 
         # replace the content in  current datasets
-        train_embs = torch.tensor(train_embs, dtype=torch.float)
         train_samples = self.train_ds.samples
         nn_idx = torch.tensor(nn_idx, dtype=torch.long)
         self.train_ds.nn_emb = train_samples
