@@ -1,10 +1,9 @@
 from time_wise_rat.augmentations import BaselineDataModule
 from torch.utils.data import DataLoader, TensorDataset
-
+from sklearn.neighbors import NearestNeighbors
+from scipy.stats import pearsonr
 
 import numpy as np
-import torch
-import faiss
 
 
 class MQRetNNDataModule(BaselineDataModule):
@@ -30,16 +29,17 @@ class MQRetNNDataModule(BaselineDataModule):
             batch_embs = self.trainer.model.encode(batch.to(device)).to("cpu").view(bs, -1).numpy()
             embeddings.append(batch_embs)
         embeddings = np.concatenate(embeddings, axis=0)
-        # get nns for train part
+        # get 10 closest matches by pearson's correlation
         n_train = len(self.train_ds)
         n_val = len(self.val_ds)
         train_embs = embeddings[:n_train]
-        index = faiss.IndexFlatL2(train_embs.shape[1])
-        index.add(train_embs)
-        _, nn_idx = index.search(embeddings, k=24)
-
+        neigh = NearestNeighbors(
+            n_neighbors=10,
+            metric=lambda x, y: pearsonr(x, y)[0]
+        )
+        neigh.fit(train_embs)
+        nn_idx = neigh.kneighbors(embeddings, return_distance=False)
         # replace the content in  current datasets
-        train_embs = torch.tensor(train_embs, dtype=torch.float)
         train_samples = self.train_ds.samples
         nn_idx = torch.tensor(nn_idx, dtype=torch.long)
         self.train_ds.nn_emb = train_samples
@@ -59,9 +59,12 @@ class MQRetNNDataModule(BaselineDataModule):
         self.test_dl = test_dl
 
     def val_dataloader(self):
-        self.update_loaders()
+        # only update nearest neighbors after pre-training
+        if self.trainer.current_epoch == 0:
+            self.update_loaders()
         return self.val_dl
 
     def test_dataloader(self):
-        self.update_loaders()
         return self.test_dl
+
+import torch

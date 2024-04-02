@@ -37,7 +37,6 @@ class TERADataModule(BaselineDataModule):
         index = faiss.IndexFlatIP(train_embs.shape[1])
         index.add(train_embs)
         _, nn_idx = index.search(embeddings, k=24)
-
         # replace the content in  current datasets
         train_samples = self.train_ds.samples
         nn_idx = torch.tensor(nn_idx, dtype=torch.long)
