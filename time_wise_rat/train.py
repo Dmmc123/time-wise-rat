@@ -8,7 +8,9 @@ from time_wise_rat.augmentations import (
 )
 from time_wise_rat.models import (
     PatchTST,
-    AutoFormer
+    AutoFormer,
+    NSTransformer,
+    FEDformer
 )
 from time_wise_rat.configs import (
     ExperimentConfig
@@ -34,7 +36,9 @@ def train(exp_cfg: ExperimentConfig) -> Mapping[str, float]:
     # create (or load from existing) model
     model_class = {
         "patchtst": PatchTST,
-        "autoformer": AutoFormer
+        "autoformer": AutoFormer,
+        "nstransformer": NSTransformer,
+        "fedformer": FEDformer
     }
     model = model_class[exp_cfg.model.model_name](cfg=exp_cfg)
     # if needed for augmentation - load the best model

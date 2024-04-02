@@ -1,3 +1,5 @@
 from .base import BaselineModel
-from .patch_tst import PatchTST
-from .auto_former import AutoFormer
+from .patchtst import PatchTST
+from .autoformer import AutoFormer
+from .nstransformer import NSTransformer
+from .fedformer import FEDFormer

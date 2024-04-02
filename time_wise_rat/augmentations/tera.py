@@ -2,7 +2,6 @@ from time_wise_rat.augmentations import BaselineDataModule
 from torch.utils.data import DataLoader, TensorDataset
 
 
-import pytorch_lightning as pl
 import numpy as np
 import torch
 import faiss
