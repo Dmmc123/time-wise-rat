@@ -4,6 +4,7 @@ from sklearn.neighbors import NearestNeighbors
 from scipy.stats import pearsonr
 
 import numpy as np
+import torch
 
 
 class MQRetNNDataModule(BaselineDataModule):
@@ -33,12 +34,15 @@ class MQRetNNDataModule(BaselineDataModule):
         n_train = len(self.train_ds)
         n_val = len(self.val_ds)
         train_embs = embeddings[:n_train]
+        sampled_idx = np.random.choice(train_embs.shape[0], 16, replace=False)
+        sampled_embs = train_embs[sampled_idx]
         neigh = NearestNeighbors(
             n_neighbors=10,
             metric=lambda x, y: pearsonr(x, y)[0]
         )
-        neigh.fit(train_embs)
+        neigh.fit(sampled_embs)
         nn_idx = neigh.kneighbors(embeddings, return_distance=False)
+        nn_idx = sampled_idx[nn_idx]
         # replace the content in  current datasets
         train_samples = self.train_ds.samples
         nn_idx = torch.tensor(nn_idx, dtype=torch.long)
@@ -66,5 +70,3 @@ class MQRetNNDataModule(BaselineDataModule):
 
     def test_dataloader(self):
         return self.test_dl
-
-import torch
