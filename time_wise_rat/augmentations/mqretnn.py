@@ -1,8 +1,7 @@
 from time_wise_rat.augmentations import BaselineDataModule
 from torch.utils.data import DataLoader, TensorDataset
-from sklearn.neighbors import NearestNeighbors
-from scipy.stats import pearsonr
 
+import pynndescent
 import numpy as np
 import torch
 
@@ -26,23 +25,18 @@ class MQRetNNDataModule(BaselineDataModule):
         embeddings = []
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         for (batch,) in ts_dl:
-            bs = batch.size(0)
-            batch_embs = self.trainer.model.encode(batch.to(device)).to("cpu").view(bs, -1).numpy()
-            embeddings.append(batch_embs)
+            batch_embs = self.trainer.model.encode(batch.to(device)).to("cpu")
+            if len(batch_embs.size()) == 3:
+                batch_embs = batch_embs.mean(dim=1)
+            embeddings.append(batch_embs.numpy())
         embeddings = np.concatenate(embeddings, axis=0)
         # get 10 closest matches by pearson's correlation
         n_train = len(self.train_ds)
         n_val = len(self.val_ds)
         train_embs = embeddings[:n_train]
-        sampled_idx = np.random.choice(train_embs.shape[0], 16, replace=False)
-        sampled_embs = train_embs[sampled_idx]
-        neigh = NearestNeighbors(
-            n_neighbors=10,
-            metric=lambda x, y: pearsonr(x, y)[0]
-        )
-        neigh.fit(sampled_embs)
-        nn_idx = neigh.kneighbors(embeddings, return_distance=False)
-        nn_idx = sampled_idx[nn_idx]
+        index = pynndescent.NNDescent(train_embs, metric="correlation")
+        index.prepare()
+        nn_idx, _ = index.query(embeddings, k=10)
         # replace the content in  current datasets
         train_samples = self.train_ds.samples
         nn_idx = torch.tensor(nn_idx, dtype=torch.long)
@@ -62,11 +56,8 @@ class MQRetNNDataModule(BaselineDataModule):
         self.val_dl = val_dl
         self.test_dl = test_dl
 
-    def val_dataloader(self):
+    def train_dataloader(self):
         # only update nearest neighbors after pre-training
         if self.trainer.current_epoch == 0:
             self.update_loaders()
-        return self.val_dl
-
-    def test_dataloader(self):
-        return self.test_dl
+        return self.train_dl

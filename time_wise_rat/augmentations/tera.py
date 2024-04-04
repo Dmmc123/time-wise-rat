@@ -26,9 +26,10 @@ class TERADataModule(BaselineDataModule):
         embeddings = []
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         for (batch,) in ts_dl:
-            bs = batch.size(0)
-            batch_embs = self.trainer.model.encode(batch.to(device)).to("cpu").view(bs, -1).numpy()
-            embeddings.append(batch_embs)
+            batch_embs = self.trainer.model.encode(batch.to(device)).to("cpu")
+            if len(batch_embs.size()) == 3:
+                batch_embs = batch_embs.mean(dim=1)
+            embeddings.append(batch_embs.numpy())
         embeddings = np.concatenate(embeddings, axis=0)
         # get nns for train part
         n_train = len(self.train_ds)
@@ -56,7 +57,7 @@ class TERADataModule(BaselineDataModule):
         self.val_dl = val_dl
         self.test_dl = test_dl
 
-    def val_dataloader(self):
+    def train_dataloader(self):
         self.update_loaders()
         return self.val_dl
 
