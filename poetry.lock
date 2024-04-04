@@ -672,6 +672,41 @@ files = [
 ]
 
 [[package]]
+name = "dtw-python"
+version = "1.4.2"
+description = "A comprehensive implementation of dynamic time warping (DTW) algorithms. DTW computes the optimal (least cumulative distance) alignment between points of two time series. Common DTW variants covered include local (slope) and global (window) constraints, subsequence matches, arbitrary distance definitions, normalizations, minimum variance matching, and so on. Provides cumulative distances, alignments, specialized plot styles, etc."
+optional = false
+python-versions = ">=3.6"
+files = [
+    {file = "dtw-python-1.4.2.tar.gz", hash = "sha256:69df1335a70ed6b8abe00b21c2dd79fcc0d56c21998520a275f566a787d05d50"},
+    {file = "dtw_python-1.4.2-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:327b8c08d4c2881dc02fab05a8bbbd0a895e6440c33306dda8aad2fc870497cb"},
+    {file = "dtw_python-1.4.2-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:6a8ceca93a47aa39549e7b9dca7d37fa6c083c3ade32ec75da47b6b1481ae636"},
+    {file = "dtw_python-1.4.2-cp310-cp310-win_amd64.whl", hash = "sha256:cfebbf77a21e50c691967a8a2e07f2687d4ed5c05e2655f04e4df0be4efad021"},
+    {file = "dtw_python-1.4.2-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:b6ec09a27011eb620bdaa926e4969ff28245beac9db2ce5938eccf12b316e514"},
+    {file = "dtw_python-1.4.2-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:c30c0f0da300d56ceac8bfbbe4b914e0364565a85af4b4dee4a562135e21461c"},
+    {file = "dtw_python-1.4.2-cp311-cp311-win_amd64.whl", hash = "sha256:a067d21ce2ecd2eb1a0d04587d03acb212cc68db64b955abfd7895db75e34fe1"},
+    {file = "dtw_python-1.4.2-cp312-cp312-macosx_10_9_x86_64.whl", hash = "sha256:5eb9e1a933deb17f068ec52b6d99dba472ba2fb7311e1fa31dc90fb526d07efa"},
+    {file = "dtw_python-1.4.2-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:f146f222ba2be471b9968dd33e743f1b1f3903d9b529a478aaeb8c07b8f026fe"},
+    {file = "dtw_python-1.4.2-cp312-cp312-win_amd64.whl", hash = "sha256:8b48597e5a194fbe2dbdc5fac5d3cd8008c369975a73a1771dd1d5c036c7978a"},
+    {file = "dtw_python-1.4.2-cp36-cp36m-macosx_10_9_x86_64.whl", hash = "sha256:92ea7b346afb1792495e1ea1477785c01d11a7cf8cb252a1c5189a1c8d1936c8"},
+    {file = "dtw_python-1.4.2-cp36-cp36m-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:f8ef887727ff2940c218b9251ba66d6c2b6a58f41d59024bb83bc572fd3ef8db"},
+    {file = "dtw_python-1.4.2-cp36-cp36m-win_amd64.whl", hash = "sha256:a8181198d2dd6f8f4212ac290349be1d7bdf4cfbc38e9d5f42f540e74d5cb0f5"},
+    {file = "dtw_python-1.4.2-cp37-cp37m-macosx_10_9_x86_64.whl", hash = "sha256:5702a154c7f41b95ae2e2c9e76f4a19b8d51989a0116f81802de77b05ab0aee6"},
+    {file = "dtw_python-1.4.2-cp37-cp37m-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:72cf20f8e55affb41ab8eb6221bb96450315bbf82fcc8593baea477d13e250ce"},
+    {file = "dtw_python-1.4.2-cp37-cp37m-win_amd64.whl", hash = "sha256:1c949e6d712cadcfb1c7f7e201dee2d022edb9df8063857cb5d013c2ed1738b0"},
+    {file = "dtw_python-1.4.2-cp38-cp38-macosx_10_9_x86_64.whl", hash = "sha256:4f3dca863cd3ae57ea6a04b2383512c050ace850e828f29dce561e9673517345"},
+    {file = "dtw_python-1.4.2-cp38-cp38-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:87a2ee836cb9f4ce33dbfc1a42f6b613330c54f5717d320155fedd5276ee5763"},
+    {file = "dtw_python-1.4.2-cp38-cp38-win_amd64.whl", hash = "sha256:b4bfadf599e0ced248391afb8b95c688d11f7807db3f57c1b7a7e9d72381d486"},
+    {file = "dtw_python-1.4.2-cp39-cp39-macosx_10_9_x86_64.whl", hash = "sha256:a9dba5ac327dd556181b2bb5a572e77d8efc296e12183e4ee488bc62a9b548de"},
+    {file = "dtw_python-1.4.2-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:77757c04af8398b450ff77b6f6568797980ffeda882a8f2a3d436945356ab070"},
+    {file = "dtw_python-1.4.2-cp39-cp39-win_amd64.whl", hash = "sha256:58fb6026ed616956b8f6ef02b32fcaf0a7e16653042862d5799ecce581431a92"},
+]
+
+[package.dependencies]
+numpy = ">=1.19"
+scipy = ">=1.1"
+
+[[package]]
 name = "executing"
 version = "2.0.1"
 description = "Get the currently executing AST node of a frame, and other information"
@@ -4140,4 +4175,4 @@ multidict = ">=4.0"
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.11.8"
-content-hash = "5aa3c1c1a1aee6f48b0a46eb3430992d80cd1d0d6cd4b8e19721a20c8041222d"
+content-hash = "6e7783c1ac4ee0d99769298d93d8dc309cac490bf94a6d1b82dd3262622df586"
