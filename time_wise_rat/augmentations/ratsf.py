@@ -82,7 +82,7 @@ class RATSFDataModule(BaselineDataModule):
         embeddings = []
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         for (batch,) in ts_dl:
-            batch_embs = self.trainer.model.encode(batch.to(device)).to("cpu")
+            batch_embs = self.trainer.model.encode(batch.to(device)).to("cpu").detach()
             if len(batch_embs.size()) == 3:
                 batch_embs = batch_embs.mean(dim=1)
             embeddings.append(batch_embs.numpy())
