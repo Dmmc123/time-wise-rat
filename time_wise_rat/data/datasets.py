@@ -39,9 +39,9 @@ class DataManager:
             "autoformer": ("windows", "window_targets"),
             "nstransformer": ("windows", "window_targets"),
             "fedformer": ("windows", "window_targets"),
-        }[self.cfg.model.model_name]
+        }[self.cfg.model.name]
         # read tensors
-        tensor_filename = f"{self.cfg.data.dataset_name}.safetensors"
+        tensor_filename = f"{self.cfg.data.name}.safetensors"
         tensor_full_path = Path(self.cfg.data.tensor_dir) / tensor_filename
         tensors = {}
         with safe_open(tensor_full_path, framework="pt", device="cpu") as f:

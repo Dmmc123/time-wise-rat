@@ -32,7 +32,7 @@ def train(exp_cfg: ExperimentConfig) -> Mapping[str, float]:
         "tera": (TERADataModule, True),
         "mqretnn": (MQRetNNDataModule, True),
         "ratsf": (RATSFDataModule, False)
-    }[exp_cfg.aug.aug_name]
+    }[exp_cfg.aug.name]
     data_module = aug_data_class_name(
         cfg=exp_cfg,
         data_manager=data_manager
@@ -44,25 +44,25 @@ def train(exp_cfg: ExperimentConfig) -> Mapping[str, float]:
         "nstransformer": NSTransformer,
         "fedformer": FEDformer
     }
-    model = model_class[exp_cfg.model.model_name](cfg=exp_cfg)
+    model = model_class[exp_cfg.model.name](cfg=exp_cfg)
     # if needed for augmentation - load the best model
     weights_dir = Path(exp_cfg.train.weights_dir)
     baseline_ckpt_dir = (weights_dir /
-                         exp_cfg.model.model_name /
-                         exp_cfg.data.dataset_name /
+                         exp_cfg.model.name /
+                         exp_cfg.data.name /
                          "baseline")
     if use_pretrain:
         model_paths = baseline_ckpt_dir.glob("*.ckpt")
         best_path = min(model_paths, key=lambda p: float(p.stem.split("=")[-1]))
-        model = model_class[exp_cfg.model.model_name].load_from_checkpoint(
+        model = model_class[exp_cfg.model.name].load_from_checkpoint(
             best_path,
             cfg=exp_cfg
         )
     # create training callbacks
     ckpt_dir = (weights_dir /
-                exp_cfg.model.model_name /
-                exp_cfg.data.dataset_name /
-                exp_cfg.aug.aug_name)
+                exp_cfg.model.name /
+                exp_cfg.data.name /
+                exp_cfg.aug.name)
     checkpoint = ModelCheckpoint(
         dirpath=ckpt_dir,
         monitor="val_rmse",
@@ -70,9 +70,9 @@ def train(exp_cfg: ExperimentConfig) -> Mapping[str, float]:
         filename="{epoch}-{val_rmse:.4f}"
     )
     logs_dir = (Path(exp_cfg.train.logs_dir) /
-                exp_cfg.model.model_name /
-                exp_cfg.data.dataset_name /
-                exp_cfg.aug.aug_name)
+                exp_cfg.model.name /
+                exp_cfg.data.name /
+                exp_cfg.aug.name)
     tb_logger = TensorBoardLogger(
         save_dir=logs_dir,
         name="logs"

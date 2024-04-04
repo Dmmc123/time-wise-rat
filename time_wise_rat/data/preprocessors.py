@@ -20,14 +20,14 @@ class TableToTensorPreprocessor:
 
     def _extract(self) -> np.ndarray:
         # read csv with time series data
-        dataset_path = f"{self.config.csv_dir}/{self.config.dataset_name}.csv"
+        dataset_path = f"{self.config.csv_dir}/{self.config.name}.csv"
         df = pd.read_csv(dataset_path)
         # return column with time series
         return df["Value"].values
 
     def _transform(self, data: np.ndarray) -> dict[str, Tensor]:
         # reduce stationarity of dataset of needed
-        if self.config.dataset_name in self.config.non_stat_datasets:
+        if self.config.name in self.config.non_stat_datasets:
             data = get_log_return(data)
         # normalize data according to training part
         n_train = int(data.shape[0] * self.config.train_size)
@@ -86,7 +86,7 @@ class TableToTensorPreprocessor:
         tensor_dir = Path(self.config.tensor_dir)
         tensor_dir.mkdir(parents=True, exist_ok=True)
         # save named tensors
-        tensor_filename = f"{self.config.dataset_name}.safetensors"
+        tensor_filename = f"{self.config.name}.safetensors"
         save_file(data, tensor_dir / tensor_filename)
 
     def run(self) -> None:
