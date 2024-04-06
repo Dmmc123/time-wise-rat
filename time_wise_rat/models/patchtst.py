@@ -43,23 +43,23 @@ class PatchTST(pl.LightningModule, BaselineModel):
         encoder_layer = nn.TransformerEncoderLayer(
             d_model=cfg.data.patch_length,
             nhead=1,  # single head self-attention
-            dim_feedforward=cfg.model.dim_fc,
+            dim_feedforward=cfg.model.dim_fc // 2,
             batch_first=True
         )
         self.encoder = nn.TransformerEncoder(
             encoder_layer=encoder_layer,
-            num_layers=cfg.model.num_layers,
+            num_layers=cfg.model.num_layers // 2,
             enable_nested_tensor=False
         )
         decoder_layer = nn.TransformerDecoderLayer(
             d_model=cfg.data.patch_length,
             nhead=1,  # single head self-attention
-            dim_feedforward=cfg.model.dim_fc,
+            dim_feedforward=cfg.model.dim_fc // 2,
             batch_first=True
         )
         self.decoder = nn.TransformerDecoder(
             decoder_layer=decoder_layer,
-            num_layers=cfg.model.num_layers
+            num_layers=cfg.model.num_layers // 2
         )
         self.head = nn.Sequential(
             nn.Dropout(p=cfg.model.dropout),
