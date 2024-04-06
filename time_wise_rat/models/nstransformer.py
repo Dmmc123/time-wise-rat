@@ -1,5 +1,9 @@
 from time_wise_rat.configs import ExperimentConfig
 from time_wise_rat.models import BaselineModel
+from sklearn.metrics import (
+    root_mean_squared_error,
+    mean_absolute_error
+)
 from torch import nn, Tensor
 from typing import Optional
 
@@ -104,11 +108,53 @@ class NSTransformer(pl.LightningModule, BaselineModel):
         for layer in self.decoder:
             layer_input = torch.cat([x, x_cnt], dim=-1)
             x = layer(layer_input) + x
-        x = self.stationarizer.denormalize(x, mu, sigma)
 
-        return x
+        y = self.proj_head(x)
+
+        return y
 
     def forward(self, x: Tensor, cnt: Optional[Tensor] = None) -> Tensor:
         emb = self.encode(x)
         y = self.decode(emb, cnt)
         return y
+
+    def configure_optimizers(self) -> dict:
+        optimizer = torch.optim.Adam(
+            params=self.parameters(),
+            lr=self.cfg.train.learning_rate
+        )
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer=optimizer,
+            patience=self.cfg.train.scheduler_patience,
+            factor=self.cfg.train.scheduling_factor
+        )
+        return {
+            "optimizer": optimizer,
+            "lr_scheduler": scheduler,
+            "monitor": "val_rmse"
+        }
+
+    def training_step(self, batch: tuple, batch_idx: int) -> Tensor:
+        src, tgt, cnt = batch
+        pred = self(src, cnt).view(-1)
+        loss = torch.nn.functional.mse_loss(pred, tgt)
+        self.log("train_mse", loss.item(), sync_dist=True, batch_size=src.size(0))
+        return loss
+
+    def validation_step(self, batch: tuple, batch_idx: int) -> dict[str, float]:
+        src, tgt, cnt = batch
+        pred = self(src, cnt).view(-1)
+        rmse = root_mean_squared_error(tgt.cpu().numpy(), pred.cpu().numpy())
+        mae = mean_absolute_error(tgt.cpu().numpy(), pred.cpu().numpy())
+        self.log("val_rmse", rmse, sync_dist=True, batch_size=src.size(0))
+        self.log("val_mae", mae, sync_dist=True, batch_size=src.size(0))
+        return {"val_rmse": rmse, "val_mae": mae}
+
+    def test_step(self, batch: tuple, batch_idx: int) -> dict[str, float]:
+        src, tgt, cnt = batch
+        pred = self(src, cnt).view(-1)
+        rmse = root_mean_squared_error(tgt.cpu().numpy(), pred.cpu().numpy())
+        mae = mean_absolute_error(tgt.cpu().numpy(), pred.cpu().numpy())
+        metric_dict = {"test_rmse": rmse, "test_mae": mae}
+        self.log_dict(metric_dict, batch_size=src.size(0))
+        return metric_dict
