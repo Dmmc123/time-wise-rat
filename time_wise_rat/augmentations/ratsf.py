@@ -94,6 +94,7 @@ class RATSFDataModule(BaselineDataModule):
         index = faiss.IndexFlatL2(train_embs.shape[1])  # euclidean
         index.add(train_embs)
         _, nn_idx = index.search(embeddings, k=3)
+        nn_idx = np.minimum(nn_idx+self.cfg.data.window_length//2, n_train-1)
         # replace the content in  current datasets
         train_samples = self.train_ds.samples
         nn_idx = torch.tensor(nn_idx, dtype=torch.long)
@@ -119,3 +120,7 @@ class RATSFDataModule(BaselineDataModule):
         elif self.trainer.current_epoch == 1:
             self.update_loaders_l2()
         return self.train_dl
+    
+    def test_dataloader(self):
+        self.update_loaders_l2()
+        return self.test_dl

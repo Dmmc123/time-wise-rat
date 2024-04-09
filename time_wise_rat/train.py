@@ -45,12 +45,23 @@ def train(exp_cfg: ExperimentConfig) -> Mapping[str, float]:
         "fedformer": FEDformer
     }
     model = model_class[exp_cfg.model.name](cfg=exp_cfg)
+    # modify hp for stable augmentation-based training
+    if exp_cfg.aug.name in {"mqretnn", "ratsf"}:
+        exp_cfg.train.learning_rate = 5e-5
+        exp_cfg.train.scheduler_patience = 10
+        exp_cfg.train.early_stopping_patience = 20
+        exp_cfg.train.min_delta = 0.01
+    elif exp_cfg.aug.name in {"baseline", "tera"}:
+        exp_cfg.train.learning_rate = 3e-4
+        exp_cfg.train.scheduler_patience = 50
+        exp_cfg.train.early_stopping_patience = 100
+        exp_cfg.train.min_delta = 0.02
     # if needed for augmentation - load the best model
     weights_dir = Path(exp_cfg.train.weights_dir)
     baseline_ckpt_dir = (weights_dir /
+                         "baseline" /
                          exp_cfg.model.name /
-                         exp_cfg.data.name /
-                         "baseline")
+                         exp_cfg.data.name)
     if use_pretrain:
         model_paths = baseline_ckpt_dir.glob("*.ckpt")
         best_path = min(model_paths, key=lambda p: float(p.stem.split("=")[-1]))
@@ -60,9 +71,9 @@ def train(exp_cfg: ExperimentConfig) -> Mapping[str, float]:
         )
     # create training callbacks
     ckpt_dir = (weights_dir /
+                exp_cfg.aug.name /
                 exp_cfg.model.name /
-                exp_cfg.data.name /
-                exp_cfg.aug.name)
+                exp_cfg.data.name)
     checkpoint = ModelCheckpoint(
         dirpath=ckpt_dir,
         monitor="val_rmse",
@@ -70,16 +81,17 @@ def train(exp_cfg: ExperimentConfig) -> Mapping[str, float]:
         filename="{epoch}-{val_rmse:.4f}"
     )
     logs_dir = (Path(exp_cfg.train.logs_dir) /
+                exp_cfg.aug.name /
                 exp_cfg.model.name /
-                exp_cfg.data.name /
-                exp_cfg.aug.name)
+                exp_cfg.data.name)
     tb_logger = TensorBoardLogger(
         save_dir=logs_dir,
         name="logs"
     )
     early_stopping = EarlyStopping(
         monitor="val_rmse",
-        patience=exp_cfg.train.early_stopping_patience
+        patience=exp_cfg.train.early_stopping_patience,
+        min_delta=exp_cfg.train.min_delta
     )
     # create trainer object
     trainer = pl.Trainer(
@@ -95,7 +107,7 @@ def train(exp_cfg: ExperimentConfig) -> Mapping[str, float]:
         datamodule=data_module
     )
     # evaluate the model
-    metrics = trainer.test(dataloaders=data_module, ckpt_path="best")
+    metrics = trainer.test(dataloaders=data_module, ckpt_path="last")
     return metrics[0]
 
 

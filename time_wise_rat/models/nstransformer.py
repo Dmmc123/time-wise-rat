@@ -71,7 +71,7 @@ class NSTransformer(pl.LightningModule, BaselineModel):
                 DestationaryAttention(
                     input_size=cfg.data.window_length,
                     proj_dim=cfg.model.dim_fc
-                ) for _ in range(cfg.model.num_layers)
+                ) for _ in range(cfg.model.num_layers//2)
             ]
         )
         self.decoder = nn.ModuleList(
@@ -80,7 +80,7 @@ class NSTransformer(pl.LightningModule, BaselineModel):
                     input_size=cfg.data.window_length*2,
                     proj_dim=cfg.model.dim_fc,
                     narrow_out_proj=True
-                ) for _ in range(cfg.model.num_layers)
+                ) for _ in range(cfg.model.num_layers//2)
             ]
         )
         self.proj_head = nn.Linear(cfg.data.window_length, 1)

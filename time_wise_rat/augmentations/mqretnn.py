@@ -61,3 +61,7 @@ class MQRetNNDataModule(BaselineDataModule):
         if self.trainer.current_epoch == 0:
             self.update_loaders()
         return self.train_dl
+    
+    def test_dataloader(self):
+        self.update_loaders()
+        return self.test_dl
