@@ -5,3 +5,6 @@ data/cache/
 data/raw/datasets.zip
 weights/
 runs/
+outputs/
+multirun/
+ipynb/
